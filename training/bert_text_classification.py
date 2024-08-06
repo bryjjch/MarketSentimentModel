@@ -258,7 +258,7 @@ if not os.path.exists(OUTPUT_DIR):
   os.makedirs(OUTPUT_DIR)
 
 # 2. Create model save path
-MODEL_NAME = "Finetuned_BERT.model.pth"
+MODEL_NAME = "model.pth"
 MODEL_SAVE_PATH = OUTPUT_DIR + MODEL_NAME
 
 # 3. Save model state dict

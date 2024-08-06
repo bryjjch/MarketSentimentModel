@@ -72,7 +72,7 @@ def create_heatmap(sentiment_labels):
 # Load tokenizer and model
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=3)
-state_dict = torch.load('Finetuned_BERT.model.pth', map_location=torch.device('cpu'))
+state_dict = torch.load('model.pth', map_location=torch.device('cpu'))
 model.load_state_dict(state_dict)
 model.eval()
 

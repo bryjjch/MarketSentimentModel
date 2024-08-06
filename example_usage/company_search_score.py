@@ -53,7 +53,7 @@ print(news_titles)
 # Load tokenizer and model
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=3)
-state_dict = torch.load('Finetuned_BERT.model.pth', map_location=torch.device(device))
+state_dict = torch.load('Finetuned_BERT.pth', map_location=torch.device(device))
 model.load_state_dict(state_dict)
 model.eval()
 
