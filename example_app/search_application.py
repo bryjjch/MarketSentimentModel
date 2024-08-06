@@ -73,7 +73,7 @@ def create_heatmap(sentiment_labels):
 # Load tokenizer and model
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=3)
-state_dict = torch.load('model.pth', map_location=torch.device('cpu'))
+state_dict = torch.load('my_model/model/model.pth', map_location=torch.device('cpu'))
 model.load_state_dict(state_dict)
 model.eval()
 
@@ -91,7 +91,13 @@ def analyze():
     sentiment_values = decode_sentiment(predictions)
     heatmap_base64 = create_heatmap(sentiment_values)
     
-    average_sentiment = sum(sentiment_values) / len(sentiment_values) if sentiment_values else 0
+    # Map sentiment labels to numerical values
+    sentiment_map = {'negative': -1, 'neutral': 0, 'positive': 1}
+
+    # Convert sentiment labels to numerical values
+    numerical_sentiments = [sentiment_map[sentiment] for sentiment in sentiment_values]
+
+    average_sentiment = sum(numerical_sentiments) / len(numerical_sentiments) if numerical_sentiments else 0
     print(f'Overall Sentiment Score: {average_sentiment}')
     
     return render_template('result.html', heatmap_base64=heatmap_base64, stock_symbol=stock_symbol)

@@ -1,0 +1,14 @@
+<!-- templates/result.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Results</title>
+</head>
+<body>
+    <h1>Sentiment Analysis Results for {{ stock_symbol }}</h1>
+    <img src="data:image/png;base64,{{ heatmap_base64 }}" alt="Sentiment Heatmap">
+    <a href="/">Back to Home</a>
+</body>
+</html>
