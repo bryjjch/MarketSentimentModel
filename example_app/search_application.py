@@ -8,6 +8,7 @@ import seaborn as sns
 import io
 import base64
 import serpapi
+import serp_api_key
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -24,7 +25,7 @@ def search_google_news(query, num_results=10):
     params = {
         "engine": "google_news",
         "q": query,
-        "api_key": "7d2578c0d84947939e1b3aab051d37a70c90e91a9ae0f3c2f98001559aba08f5"
+        "api_key": serp_api_key.API_KEY_SERVICE
     }
     result = serpapi.search(params)
     for article in result["news_results"]:

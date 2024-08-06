@@ -3,6 +3,7 @@ import serpapi
 import requests
 from transformers import BertTokenizer, BertForSequenceClassification
 import torch
+import serp_api_key
 
 # Set device to whatever device is available
 if torch.cuda.is_available():
@@ -19,7 +20,7 @@ def search_google_news(query, num_results=10):
     params = {
         "engine": "google_news",
         "q": query,
-        "api_key": "7d2578c0d84947939e1b3aab051d37a70c90e91a9ae0f3c2f98001559aba08f5"
+        "api_key": serp_api_key.API_KEY_SERVICE
     }
     print("Calling SerpAPI")
     result = serpapi.search(params)
