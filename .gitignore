@@ -1,2 +1,9 @@
 serp_api_key.py
 model.tar.gz
+
+outputs/
+data/FinancialPhraseBank-v1.0.zip
+data/FinancialPhraseBank-v1.0/
+**/__pycache__/
+*.egg-info/
+.venv/
