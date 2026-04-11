@@ -4,7 +4,8 @@ Fine-tune a BERT-family classifier on Financial PhraseBank (and optional pseudo-
 Supports:
 - FinBERT or other HF checkpoints (--base_model ProsusAI/finbert)
 - Optional encoder weights from MLM continued pre-training (--mlm_checkpoint)
-- Merging pseudo-labeled JSONL/CSV (--pseudo_data)
+- Merging pseudo-labeled JSONL/CSV (--pseudo_data); train/val/test splits are drawn from
+  PhraseBank only, then pseudo rows are added to the training pool only
 
 Saves a Hugging Face model directory plus ``training_manifest.json``.
 Use ``training.inference.SentimentPredictor`` for aligned train/serve tokenization.
@@ -262,7 +263,7 @@ def main() -> None:
         pb_path = ensure_finphrasebank()
     df_pb = load_finphrasebank_dataframe(pb_path)
 
-    frames = [df_pb]
+    df_p: pd.DataFrame | None = None
     # If pseudo_data is provided, load the labeled table
     if args.pseudo_data:
         # Load the labeled table
@@ -273,27 +274,32 @@ def main() -> None:
             n = max(1, int(len(df_p) * args.pseudo_weight))
             # Sample the labeled table
             df_p = df_p.sample(n=n, random_state=args.seed, replace=len(df_p) < n)
-        frames.append(df_p)
 
-    # Concatenate the frames
-    df = pd.concat(frames, ignore_index=True)
-    # Shuffle the data
-    df = df.sample(frac=1.0, random_state=args.seed).reset_index(drop=True)
-
-    # Build the model and tokenizer
     model, tokenizer = build_model_and_tokenizer(args.base_model, args.mlm_checkpoint)
-    # If the model uses the FinBERT label order, convert the labels to FinBERT labels
+
+    df_pb_split = df_pb.copy()
     if model_uses_finbert_label_order(model):
-        # Convert the labels to FinBERT labels
-        df = phrasebank_labels_to_finbert(df)
+        df_pb_split = phrasebank_labels_to_finbert(df_pb_split)
 
     # Split the data into train/val/test
-    train_df, val_df, test_df = split_labeled_frame(
-        df,
+    train_pb, val_df, test_df = split_labeled_frame(
+        df_pb_split,
         val_ratio=args.val_ratio,
         test_ratio=args.test_ratio,
         seed=args.seed,
     )
+
+    # If pseudo_data is provided, add the pseudo rows to the training pool
+    if df_p is not None:
+        # Copy the pseudo data
+        df_p_train = df_p.copy()
+        # If the model uses the FinBERT label order, convert the labels to FinBERT labels
+        if model_uses_finbert_label_order(model):
+            df_p_train = phrasebank_labels_to_finbert(df_p_train)
+        train_df = pd.concat([train_pb, df_p_train], ignore_index=True)
+        train_df = train_df.sample(frac=1.0, random_state=args.seed).reset_index(drop=True)
+    else:
+        train_df = train_pb
 
     # Create the datasets
     train_ds = Dataset.from_pandas(train_df[["text", "label"]].reset_index(drop=True))
@@ -426,7 +432,7 @@ def main() -> None:
     # Create the data summary
     data_summary = {
         "phrasebank_rows": int(len(df_pb)),
-        "pseudo_rows": int(len(df) - len(df_pb)),
+        "pseudo_rows": int(len(df_p)) if df_p is not None else 0,
         "train_rows": int(len(train_df)),
         "val_rows": int(len(val_df)),
         "test_rows": int(len(test_df)) if test_df is not None else 0,
