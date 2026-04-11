@@ -1,9 +1,38 @@
+# Project-specific
 serp_api_key.py
 model.tar.gz
 
 outputs/
 data/FinancialPhraseBank-v1.0.zip
 data/FinancialPhraseBank-v1.0/
-**/__pycache__/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Native extensions
+*.so
+*.pyd
+
+# Packaging (setuptools / pip)
+build/
+dist/
+.eggs/
 *.egg-info/
-.venv/
+
+# Virtual environments & local secrets
+.env
+.venv
+venv/
+env/
+
+# Tests & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Type checking
+.mypy_cache/
