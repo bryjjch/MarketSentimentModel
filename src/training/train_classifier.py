@@ -34,7 +34,12 @@ from transformers import (
     TrainingArguments,
 )
 
-from .common import ensure_finphrasebank, load_finphrasebank_dataframe, load_labeled_table
+from .common import (
+    ensure_finphrasebank,
+    load_finphrasebank_dataframe,
+    load_labeled_table,
+    trainer_warmup_steps,
+)
 
 # Financial PhraseBank / deployment label names.
 PHRASEBANK_ID2LABEL = {0: "negative", 1: "neutral", 2: "positive"}
@@ -238,15 +243,22 @@ def main() -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    warmup_steps = trainer_warmup_steps(
+        num_train_examples=len(train_tok),
+        per_device_train_batch_size=args.train_batch_size,
+        gradient_accumulation_steps=1,
+        num_train_epochs=args.num_train_epochs,
+        warmup_ratio=args.warmup_ratio,
+    )
+
     targs = TrainingArguments(
         output_dir=str(out_dir),
-        overwrite_output_dir=True,
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.train_batch_size,
         per_device_eval_batch_size=args.eval_batch_size,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        warmup_ratio=args.warmup_ratio,
+        warmup_steps=warmup_steps,
         eval_strategy="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,
@@ -263,7 +275,7 @@ def main() -> None:
         args=targs,
         train_dataset=train_tok,
         eval_dataset=val_tok,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=collator,
         compute_metrics=compute_metrics,
     )

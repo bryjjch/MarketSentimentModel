@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import zipfile
 from pathlib import Path
@@ -17,6 +18,34 @@ FINPHRASE_ZIP_URL = (
     "https://huggingface.co/datasets/takala/financial_phrasebank/resolve/main/data/"
     "FinancialPhraseBank-v1.0.zip?download=true"
 )
+
+
+def trainer_warmup_steps(
+    *,
+    num_train_examples: int,
+    per_device_train_batch_size: int,
+    gradient_accumulation_steps: int,
+    num_train_epochs: float,
+    warmup_ratio: float,
+) -> int:
+    """
+    Optimizer warmup steps consistent with ``transformers.Trainer`` epoch scheduling.
+
+    ``TrainingArguments.warmup_ratio`` is deprecated in favor of ``warmup_steps``; this
+    mirrors ``Trainer.set_initial_training_values`` (dataloader length + grad accumulation).
+    """
+    if warmup_ratio <= 0:
+        return 0
+    # Ensure the batch size is at least 1
+    per_device_bs = max(1, int(per_device_train_batch_size))
+    grad_accum = max(1, int(gradient_accumulation_steps))
+    len_dataloader = max(1, math.ceil(num_train_examples / per_device_bs))
+    num_update_steps_per_epoch = max(
+        len_dataloader // grad_accum + int(len_dataloader % grad_accum > 0),
+        1,
+    )
+    max_steps = math.ceil(float(num_train_epochs) * num_update_steps_per_epoch)
+    return int(max_steps * warmup_ratio)
 
 
 def default_data_root() -> Path:

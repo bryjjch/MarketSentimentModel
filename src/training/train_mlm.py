@@ -22,6 +22,8 @@ from transformers import (
     TrainingArguments,
 )
 
+from .common import trainer_warmup_steps
+
 
 def load_texts_from_jsonl(path: Path, text_key: str) -> list[str]:
     """Load texts from a JSONL file"""
@@ -144,16 +146,23 @@ def main() -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    warmup_steps = trainer_warmup_steps(
+        num_train_examples=len(tokenized),
+        per_device_train_batch_size=args.per_device_train_batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        num_train_epochs=args.num_train_epochs,
+        warmup_ratio=args.warmup_ratio,
+    )
+
     # Create the training arguments
     training_args = TrainingArguments(
         output_dir=str(out_dir),
-        overwrite_output_dir=True,
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        warmup_ratio=args.warmup_ratio,
+        warmup_steps=warmup_steps,
         logging_steps=max(
             10,
             len(tokenized) // max(1, args.per_device_train_batch_size * 100),
@@ -170,7 +179,7 @@ def main() -> None:
         args=training_args,
         train_dataset=tokenized,
         data_collator=collator,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
     )
     # Train the model
     trainer.train()
