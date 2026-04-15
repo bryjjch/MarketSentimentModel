@@ -36,3 +36,6 @@ coverage.xml
 
 # Type checking
 .mypy_cache/
+
+# Terraform local build artifacts
+infra/terraform/build/
