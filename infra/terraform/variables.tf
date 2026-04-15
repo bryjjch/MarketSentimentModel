@@ -31,10 +31,16 @@ variable "sagemaker_image_uri" {
   description = "Hugging Face PyTorch inference DLC image URI for this region (see infra/README.md)."
 }
 
-variable "sagemaker_instance_type" {
-  type        = string
-  description = "Instance type for the real-time endpoint (e.g. ml.m5.xlarge, ml.g4dn.xlarge)."
-  default     = "ml.m5.xlarge"
+variable "sagemaker_serverless_memory_size_in_mb" {
+  type        = number
+  description = "Memory size for SageMaker Serverless Inference (MB). Valid values are 1024, 2048, 3072, 4096, 5120, or 6144."
+  default     = 2048
+}
+
+variable "sagemaker_serverless_max_concurrency" {
+  type        = number
+  description = "Maximum concurrent invocations for SageMaker Serverless Inference."
+  default     = 10
 }
 
 variable "endpoint_name" {

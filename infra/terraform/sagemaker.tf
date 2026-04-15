@@ -19,9 +19,12 @@ resource "aws_sagemaker_endpoint_configuration" "classifier" {
   production_variants {
     variant_name           = "primary"
     model_name             = aws_sagemaker_model.classifier.name
-    initial_instance_count = 1
-    instance_type          = var.sagemaker_instance_type
     initial_variant_weight = 1
+
+    serverless_config {
+      memory_size_in_mb = var.sagemaker_serverless_memory_size_in_mb
+      max_concurrency   = var.sagemaker_serverless_max_concurrency
+    }
   }
 }
 

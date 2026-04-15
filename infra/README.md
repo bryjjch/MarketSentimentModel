@@ -1,6 +1,6 @@
 # AWS inference slice (S3, SageMaker, API Gateway)
 
-This folder implements the �backwards-first� path: package a locally trained Hugging Face classifier, upload it to **S3**, deploy a **SageMaker** real-time endpoint with the **Hugging Face inference DLC**, and front it with an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
+This folder implements the �backwards-first� path: package a locally trained Hugging Face classifier, upload it to **S3**, deploy a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, and front it with an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
 
 ## Layout
 
@@ -62,7 +62,7 @@ terraform apply
 
 - **Execution role**: trust `sagemaker.amazonaws.com`; inline policy for S3 model read, CloudWatch Logs under `/aws/sagemaker/*`, and ECR pulls for the DLC.
 - **Model**: `PrimaryContainer` with your `sagemaker_image_uri` and `model_data_url` pointing at `s3://.../models/finsense/v1/model.tar.gz` (prefix configurable via `model_key_prefix`).
-- **Endpoint**: one production variant; instance type from `sagemaker_instance_type` (default `ml.m5.xlarge`). Change instance type or count for cost/performance.
+- **Endpoint**: one production variant using `serverless_config`; tune memory and concurrency with `sagemaker_serverless_memory_size_in_mb` and `sagemaker_serverless_max_concurrency`.
 
 After deploy, outputs include `sagemaker_endpoint_name` and `predict_url`.
 
@@ -95,4 +95,4 @@ Body formats supported by the SageMaker handler match [`inference.py`](sagemaker
 
 ## 8. Cost notes
 
-The largest ongoing cost is the **provisioned endpoint instance**. Stop or delete the endpoint when idle during experiments (`terraform destroy` removes the stack; ensure `s3_force_destroy` if you need the bucket emptied).
+The largest ongoing cost is SageMaker inference usage. Serverless avoids paying for idle provisioned instances, but you should still delete the stack when not needed (`terraform destroy`; ensure `s3_force_destroy` if you need the bucket emptied).
