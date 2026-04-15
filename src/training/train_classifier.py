@@ -13,7 +13,7 @@ Use ``training.inference.SentimentPredictor`` for aligned train/serve tokenizati
 Example:
   python -m training.train_classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
   python -m training.train_classifier --base_model bert-base-uncased --mlm_checkpoint outputs/mlm_bert --pseudo_data data/pseudo.jsonl --output_dir outputs/clf_mlm
-  ms-train-classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
+  finsense-train-classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
 """
 
 from __future__ import annotations

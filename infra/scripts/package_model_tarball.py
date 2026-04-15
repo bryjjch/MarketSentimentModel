@@ -54,7 +54,7 @@ def package_model(
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="msent-model-tar-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="finsense-model-tar-") as tmp:
         stage = Path(tmp) / "bundle"
         stage.mkdir(parents=True)
         # HF weights + tokenizer at tarball root

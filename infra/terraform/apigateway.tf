@@ -1,5 +1,5 @@
 resource "aws_apigatewayv2_api" "http" {
-  name          = "${var.project_name}-sentiment-api"
+  name          = "${var.project_name}-api"
   protocol_type = "HTTP"
 
   cors_configuration {

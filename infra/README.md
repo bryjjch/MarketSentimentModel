@@ -61,7 +61,7 @@ terraform apply
 ## 5. SageMaker endpoint (Terraform)
 
 - **Execution role**: trust `sagemaker.amazonaws.com`; inline policy for S3 model read, CloudWatch Logs under `/aws/sagemaker/*`, and ECR pulls for the DLC.
-- **Model**: `PrimaryContainer` with your `sagemaker_image_uri` and `model_data_url` pointing at `s3://�/models/sentiment/v1/model.tar.gz` (prefix configurable via `model_key_prefix`).
+- **Model**: `PrimaryContainer` with your `sagemaker_image_uri` and `model_data_url` pointing at `s3://.../models/finsense/v1/model.tar.gz` (prefix configurable via `model_key_prefix`).
 - **Endpoint**: one production variant; instance type from `sagemaker_instance_type` (default `ml.m5.xlarge`). Change instance type or count for cost/performance.
 
 After deploy, outputs include `sagemaker_endpoint_name` and `predict_url`.

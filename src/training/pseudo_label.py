@@ -10,7 +10,7 @@ Requires an API key for the chosen provider unless using --provider echo (offlin
 Example:
   python -m training.pseudo_label --input data/raw_news.jsonl --output data/pseudo.jsonl --model gpt-4o-mini
   python -m training.pseudo_label --provider google --model gemini-2.0-flash --input data/raw_news.jsonl --output data/pseudo.jsonl
-  ms-pseudo-label --input data/raw_news.jsonl --output data/pseudo.jsonl
+  finsense-pseudo-label --input data/raw_news.jsonl --output data/pseudo.jsonl
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ variable "aws_region" {
 variable "project_name" {
   type        = string
   description = "Short name prefix for resource names (letters, numbers, hyphen)."
-  default     = "msent"
+  default     = "finsense"
 }
 
 variable "bucket_name" {
@@ -18,7 +18,7 @@ variable "bucket_name" {
 variable "model_key_prefix" {
   type        = string
   description = "S3 key prefix (no leading slash) for the packaged model object."
-  default     = "models/sentiment/v1"
+  default     = "models/finsense/v1"
 }
 
 variable "model_tarball_path" {

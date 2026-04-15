@@ -1,4 +1,4 @@
-# Market Sentiment Model
+# FinSense
 
 Training code for financial **three-class sentiment** (negative, neutral, positive) using Hugging Face **Transformers** and PyTorch. You can fine-tune **BERT**-family checkpoints (including **FinBERT**), optionally continue pre-training with **masked language modeling (MLM)** on your own text, and optionally mix in **LLM pseudo-labeled** data.
 
@@ -72,7 +72,7 @@ rows = p.predict(["EPS beat", "   ", "guidance cut"])
 
 After installation, these entry points are available (see `--help` on each):
 
-### 1. Fine-tune the classifier (`ms-train-classifier`)
+### 1. Fine-tune the classifier (`finsense-train-classifier`)
 
 Uses **Financial PhraseBank** by default (downloaded into `data/` if missing). Writes a **Hugging Face model folder** plus **`training_manifest.json`** under `--output_dir`.
 
@@ -83,21 +83,21 @@ Uses **Financial PhraseBank** by default (downloaded into `data/` if missing). W
 **Model selection**: `--metric_for_best_model` (default `macro_f1`) controls `load_best_model_at_end`.
 
 ```bash
-ms-train-classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
-ms-train-classifier --base_model bert-base-uncased --mlm_checkpoint outputs/mlm_bert --pseudo_data data/pseudo.jsonl --output_dir outputs/clf_mlm
+finsense-train-classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
+finsense-train-classifier --base_model bert-base-uncased --mlm_checkpoint outputs/mlm_bert --pseudo_data data/pseudo.jsonl --output_dir outputs/clf_mlm
 ```
 
 Useful flags include `--phrasebank_txt`, `--pseudo_data`, `--pseudo_weight`, `--num_train_epochs`, `--fp16` (CUDA), `--max_length`, `--test_ratio`, and `--metric_for_best_model`.
 
-### 2. Continued pre-training with MLM (`ms-train-mlm`)
+### 2. Continued pre-training with MLM (`finsense-train-mlm`)
 
 Unlabeled **JSONL** (field `text` by default) and/or **`.txt`** (one document per line):
 
 ```bash
-ms-train-mlm --train_files data/wsb.jsonl data/reuters_lines.txt --output_dir outputs/mlm_bert
+finsense-train-mlm --train_files data/wsb.jsonl data/reuters_lines.txt --output_dir outputs/mlm_bert
 ```
 
-### 3. Pseudo-labeling with an LLM (`ms-pseudo-label`)
+### 3. Pseudo-labeling with an LLM (`finsense-pseudo-label`)
 
 Reads JSONL with a text field, appends `label` / `label_name` per row. Requires API keys for cloud providers:
 
@@ -106,8 +106,8 @@ Reads JSONL with a text field, appends `label` / `label_name` per row. Requires 
 - **Offline stub**: `--provider echo` (random labels for plumbing tests only).
 
 ```bash
-ms-pseudo-label --input data/raw_news.jsonl --output data/pseudo.jsonl
-ms-pseudo-label --provider google --input data/raw_news.jsonl --output data/pseudo.jsonl --resume
+finsense-pseudo-label --input data/raw_news.jsonl --output data/pseudo.jsonl
+finsense-pseudo-label --provider google --input data/raw_news.jsonl --output data/pseudo.jsonl --resume
 ```
 
 ## Run manifest (`training_manifest.json`)
