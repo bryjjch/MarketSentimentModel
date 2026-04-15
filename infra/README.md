@@ -69,7 +69,9 @@ After deploy, outputs include `sagemaker_endpoint_name` and `predict_url`.
 ## 6. API Gateway + Lambda
 
 - **HTTP API** (v2) with **CORS** (`cors_allow_origins`, default `["*"]` for prototyping�restrict in production).
+- **Stage throttling**: `default_route_settings` on `$default` with `apigateway_throttle_rate_limit` (RPS) and `apigateway_throttle_burst_limit` (burst).
 - **Route** `POST /predict` ? **Lambda** (Python 3.12) with `boto3` `invoke_endpoint`, `ContentType` / `Accept` `application/json`.
+- **Lambda reserved concurrency**: `lambda_reserved_concurrent_executions` caps parallel invokes (default `5`; align with `sagemaker_serverless_max_concurrency`). Use `-1` for no reservation.
 - **Lambda IAM**: `sagemaker:InvokeEndpoint` scoped to the created endpoint ARN; plus `AWSLambdaBasicExecutionRole` for CloudWatch Logs.
 
 ### Example request

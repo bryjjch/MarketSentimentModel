@@ -15,3 +15,8 @@ sagemaker_serverless_max_concurrency   = 10
 # bucket_name    = "my-globally-unique-models-bucket"
 # endpoint_name  = "finsense-endpoint"
 # cors_allow_origins = ["https://myapp.example.com"]
+#
+# Throttling (HTTP API + Lambda; tune with SageMaker serverless max_concurrency):
+# apigateway_throttle_rate_limit  = 10
+# apigateway_throttle_burst_limit = 20
+# lambda_reserved_concurrent_executions = 5

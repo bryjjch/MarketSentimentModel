@@ -16,6 +16,8 @@ resource "aws_lambda_function" "predict" {
   timeout     = 29
   memory_size = 256
 
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
+
   environment {
     variables = {
       SAGEMAKER_ENDPOINT_NAME = aws_sagemaker_endpoint.classifier.name

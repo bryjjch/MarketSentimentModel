@@ -55,6 +55,24 @@ variable "cors_allow_origins" {
   default     = ["*"]
 }
 
+variable "apigateway_throttle_rate_limit" {
+  type        = number
+  description = "HTTP API stage steady-state requests per second (default route throttling)."
+  default     = 10
+}
+
+variable "apigateway_throttle_burst_limit" {
+  type        = number
+  description = "HTTP API stage short burst capacity (requests); typically >= rate_limit."
+  default     = 20
+}
+
+variable "lambda_reserved_concurrent_executions" {
+  type        = number
+  description = "Reserved concurrent executions for the predict Lambda (caps invocations in parallel). Use -1 for no reservation. Align with sagemaker_serverless_max_concurrency."
+  default     = 5
+}
+
 variable "s3_force_destroy" {
   type        = bool
   description = "If true, empty and delete the model bucket on terraform destroy (dev only)."
