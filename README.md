@@ -17,19 +17,10 @@ Training code for financial **three-class sentiment** (negative, neutral, positi
 | `notebooks/bert_text_classification.ipynb` | Exploratory / teaching notebook aligned with the pipeline |
 | `data/` | Default download location for Financial PhraseBank (created on first use) |
 | `tests/` | Pytest suite |
-| `requirements-training.txt` | Editable install (`pip install -r requirements-training.txt`) |
-| `requirements/pinned-train.txt` | Pinned versions for reproducible train + dev environments |
-| `requirements/pinned-serve.txt` | Minimal pins for inference-only images |
 
 ## Installation
 
 From the repository root:
-
-```bash
-pip install -r requirements-training.txt
-```
-
-Or equivalently:
 
 ```bash
 pip install -e .
@@ -42,10 +33,6 @@ pip install -e ".[dev]"
 ```
 
 Install a CUDA-enabled **PyTorch** build from [pytorch.org](https://pytorch.org/get-started/locally/) first if you want GPU training.
-
-### Reproducible / pinned environments
-
-For Docker, SageMaker, or CI, install the exact library set from `requirements/pinned-train.txt` (after installing a matching **torch** wheel for your CUDA/CPU target). For inference-only containers, use `requirements/pinned-serve.txt`.
 
 ## Label convention
 
