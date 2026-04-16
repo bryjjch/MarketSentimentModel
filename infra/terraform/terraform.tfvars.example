@@ -2,7 +2,7 @@
 
 aws_region = "us-east-1"
 
-# Hugging Face DLC for your region (CPU example � verify current tag in AWS docs):
+# Hugging Face DLC for your region (CPU example — verify current tag in AWS docs):
 # sagemaker_image_uri = "763104351234.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:2.5.1-transformers4.48.3-cpu-py311-ubuntu22.04"
 
 sagemaker_image_uri     = "REPLACE_WITH_REGION_SPECIFIC_HF_INFERENCE_DLC_URI"
