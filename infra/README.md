@@ -1,6 +1,6 @@
-# AWS inference slice (S3, SageMaker, API Gateway)
+# Infrastructure (S3, SageMaker, API Gateway)
 
-This folder implements the "backwards-first" path: package a locally trained Hugging Face classifier, upload it to **S3**, deploy a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, and front it with an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
+This folder implements the AWS infrastructure for the Finsense pipeline. Currently, it follows a "backwards-first" path: package a locally trained Hugging Face classifier, upload it to **S3**, deploy a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, and front it with an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
 
 ## Layout
 
@@ -23,9 +23,7 @@ Use the **final** saved weights under `output_dir` (the script skips `checkpoint
 
 ## 2. SageMaker container image (DLC)
 
-Pick a **Hugging Face PyTorch inference** DLC URI for the **same region** you will deploy. AWS publishes images per region (ECR account `763104351234` in many commercial regions, but always confirm in the current [AWS Deep Learning Containers](https://docs.aws.amazon.com/deep-learning-containers/latest/devguide/deep-learning-containers-images.html) / SageMaker documentation).
-
-Choose a tag that is compatible with your stack (this repo pins inference libraries in [`requirements/pinned-serve.txt`](../requirements/pinned-serve.txt): PyTorch 2.5.x, Transformers 5.5.x). If the closest DLC uses a slightly older Transformers, test the endpoint before production.
+Pick a **Hugging Face PyTorch inference** DLC URI for the **same region** you will deploy. Confirm available DLCs [`here`](https://huggingface.co/docs/sagemaker/dlcs/available).
 
 Set `sagemaker_image_uri` in `terraform.tfvars` (see [`terraform/terraform.tfvars.example`](terraform/terraform.tfvars.example)).
 
@@ -39,7 +37,7 @@ The stack creates (or uses) a private model bucket with:
 - **Versioning** enabled (easy rollback when overwriting the same key).
 - **Bucket policy** denying requests where `aws:SecureTransport` is false (TLS-only).
 
-The SageMaker execution role is granted **`s3:GetObject` / `s3:ListBucket`** on that bucket (and **`logs:*`** under `/aws/sagemaker/*`, plus **ECR read** for pulling the DLC). No separate bucket policy is required for SageMaker to read objects; IAM on the execution role is sufficient.
+The SageMaker execution role is granted **`s3:GetObject` / `s3:ListBucket`** on that bucket (and **`logs:*`** under `/aws/sagemaker/*`, plus **ECR read** for pulling the DLC).
 
 For development destroys, you may set `s3_force_destroy = true` in `terraform.tfvars` so `terraform destroy` can empty the bucket (use with care).
 
