@@ -108,6 +108,44 @@ def split_labeled_frame(
     return train_df, val_df, None
 
 
+def prepare_train_val_test_dataframes(
+    df_pb: pd.DataFrame,
+    df_pseudo: pd.DataFrame | None,
+    *,
+    model,
+    val_ratio: float,
+    test_ratio: float,
+    seed: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
+    """
+    Split PhraseBank into train/val/test, then append pseudo-labeled rows to train only.
+
+    Splits are computed on PhraseBank (after an optional FinBERT label remap on the
+    whole PhraseBank frame). Pseudo rows are never included in val or test.
+    """
+    df_pb_split = df_pb.copy()
+    if model_uses_finbert_label_order(model):
+        df_pb_split = phrasebank_labels_to_finbert(df_pb_split)
+
+    train_pb, val_df, test_df = split_labeled_frame(
+        df_pb_split,
+        val_ratio=val_ratio,
+        test_ratio=test_ratio,
+        seed=seed,
+    )
+
+    if df_pseudo is not None and not df_pseudo.empty:
+        df_p_train = df_pseudo.copy()
+        if model_uses_finbert_label_order(model):
+            df_p_train = phrasebank_labels_to_finbert(df_p_train)
+        train_df = pd.concat([train_pb, df_p_train], ignore_index=True)
+        train_df = train_df.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+    else:
+        train_df = train_pb
+
+    return train_df, val_df, test_df
+
+
 def _classifier_linear(model: torch.nn.Module) -> torch.nn.Linear:
     """Get the linear classification head from the model"""
     head = getattr(model, "classifier", None)
@@ -278,29 +316,14 @@ def main() -> None:
 
     model, tokenizer = build_model_and_tokenizer(args.base_model, args.mlm_checkpoint)
 
-    df_pb_split = df_pb.copy()
-    if model_uses_finbert_label_order(model):
-        df_pb_split = phrasebank_labels_to_finbert(df_pb_split)
-
-    # Split the data into train/val/test
-    train_pb, val_df, test_df = split_labeled_frame(
-        df_pb_split,
+    train_df, val_df, test_df = prepare_train_val_test_dataframes(
+        df_pb,
+        df_p,
+        model=model,
         val_ratio=args.val_ratio,
         test_ratio=args.test_ratio,
         seed=args.seed,
     )
-
-    # If pseudo_data is provided, add the pseudo rows to the training pool
-    if df_p is not None and not df_p.empty:
-        # Copy the pseudo data
-        df_p_train = df_p.copy()
-        # If the model uses the FinBERT label order, convert the labels to FinBERT labels
-        if model_uses_finbert_label_order(model):
-            df_p_train = phrasebank_labels_to_finbert(df_p_train)
-        train_df = pd.concat([train_pb, df_p_train], ignore_index=True)
-        train_df = train_df.sample(frac=1.0, random_state=args.seed).reset_index(drop=True)
-    else:
-        train_df = train_pb
 
     # Create the datasets
     train_ds = Dataset.from_pandas(train_df[["text", "label"]].reset_index(drop=True))
