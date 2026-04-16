@@ -1,8 +1,0 @@
-# Minimal pinned stack for inference-only containers (CPU PyPI wheels).
-# Install torch for your CUDA variant if needed, then:
-#   pip install -r requirements/pinned-serve.txt
-
-torch==2.5.1
-transformers==5.5.3
-numpy==2.1.3
-safetensors==0.4.5
