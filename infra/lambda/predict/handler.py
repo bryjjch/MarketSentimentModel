@@ -14,7 +14,6 @@ _runtime = boto3.client("sagemaker-runtime")
 
 _JSON_HEADERS = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
 }
 
 
