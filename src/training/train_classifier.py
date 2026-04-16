@@ -269,11 +269,12 @@ def main() -> None:
         # Load the labeled table
         df_p = load_labeled_table(args.pseudo_data)
         # If the pseudo_weight is not 1.0, sample the labeled table
-        if args.pseudo_weight != 1.0:
-            # Calculate the number of rows to sample
-            n = max(1, int(len(df_p) * args.pseudo_weight))
-            # Sample the labeled table
-            df_p = df_p.sample(n=n, random_state=args.seed, replace=len(df_p) < n)
+        if args.pseudo_weight != 1.0 and not df_p.empty:
+            n = int(len(df_p) * args.pseudo_weight)
+            if n <= 0:
+                df_p = df_p.sample(n=0, random_state=args.seed)
+            else:
+                df_p = df_p.sample(n=n, random_state=args.seed, replace=len(df_p) < n)
 
     model, tokenizer = build_model_and_tokenizer(args.base_model, args.mlm_checkpoint)
 
@@ -290,7 +291,7 @@ def main() -> None:
     )
 
     # If pseudo_data is provided, add the pseudo rows to the training pool
-    if df_p is not None:
+    if df_p is not None and not df_p.empty:
         # Copy the pseudo data
         df_p_train = df_p.copy()
         # If the model uses the FinBERT label order, convert the labels to FinBERT labels
