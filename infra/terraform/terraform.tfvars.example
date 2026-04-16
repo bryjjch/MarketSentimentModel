@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars and fill in. Do not commit terraform.tfvars if it contains secrets.
+
+aws_region = "us-east-1"
+
+# Hugging Face DLC for your region (CPU example — verify current tag in AWS docs):
+# sagemaker_image_uri = "763104351234.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:2.5.1-transformers4.48.3-cpu-py311-ubuntu22.04"
+
+sagemaker_image_uri     = "REPLACE_WITH_REGION_SPECIFIC_HF_INFERENCE_DLC_URI"
+model_tarball_path      = "../../model.tar.gz"
+sagemaker_serverless_memory_size_in_mb = 2048
+sagemaker_serverless_max_concurrency   = 10
+
+# Optional:
+# project_name   = "finsense"
+# bucket_name    = "my-globally-unique-models-bucket"
+# endpoint_name  = "finsense-endpoint"
+# cors_allow_origins = ["https://myapp.example.com"]
+#
+# Throttling (HTTP API + Lambda; tune with SageMaker serverless max_concurrency):
+# apigateway_throttle_rate_limit  = 10
+# apigateway_throttle_burst_limit = 20
+# lambda_reserved_concurrent_executions = 5

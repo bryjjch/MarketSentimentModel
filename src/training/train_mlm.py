@@ -5,7 +5,7 @@ Feed one or more JSONL files with a "text" field per line, or plain .txt files (
 
 Example:
   python -m training.train_mlm --train_files data/wsb.jsonl data/reuters_lines.txt --output_dir outputs/mlm_bert
-  ms-train-mlm --train_files data/wsb.jsonl --output_dir outputs/mlm_bert
+  finsense-train-mlm --train_files data/wsb.jsonl --output_dir outputs/mlm_bert
 """
 
 from __future__ import annotations

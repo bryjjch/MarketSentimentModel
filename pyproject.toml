@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "market-sentiment-training"
+name = "finsense-training"
 version = "0.1.0"
-description = "Training pipeline for MarketSentimentModel (BERT / FinBERT, MLM, pseudo-labeling)"
+description = "Training pipeline for FinSense (BERT / FinBERT, MLM, pseudo-labeling)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -26,9 +26,9 @@ dependencies = [
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-ms-pseudo-label = "training.pseudo_label:main"
-ms-train-classifier = "training.train_classifier:main"
-ms-train-mlm = "training.train_mlm:main"
+finsense-pseudo-label = "training.pseudo_label:main"
+finsense-train-classifier = "training.train_classifier:main"
+finsense-train-mlm = "training.train_mlm:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -4,7 +4,8 @@ Fine-tune a BERT-family classifier on Financial PhraseBank (and optional pseudo-
 Supports:
 - FinBERT or other HF checkpoints (--base_model ProsusAI/finbert)
 - Optional encoder weights from MLM continued pre-training (--mlm_checkpoint)
-- Merging pseudo-labeled JSONL/CSV (--pseudo_data)
+- Merging pseudo-labeled JSONL/CSV (--pseudo_data); train/val/test splits are drawn from
+  PhraseBank only, then pseudo rows are added to the training pool only
 
 Saves a Hugging Face model directory plus ``training_manifest.json``.
 Use ``training.inference.SentimentPredictor`` for aligned train/serve tokenization.
@@ -12,7 +13,7 @@ Use ``training.inference.SentimentPredictor`` for aligned train/serve tokenizati
 Example:
   python -m training.train_classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
   python -m training.train_classifier --base_model bert-base-uncased --mlm_checkpoint outputs/mlm_bert --pseudo_data data/pseudo.jsonl --output_dir outputs/clf_mlm
-  ms-train-classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
+  finsense-train-classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
 """
 
 from __future__ import annotations
@@ -105,6 +106,44 @@ def split_labeled_frame(
         stratify=strat,
     )
     return train_df, val_df, None
+
+
+def prepare_train_val_test_dataframes(
+    df_pb: pd.DataFrame,
+    df_pseudo: pd.DataFrame | None,
+    *,
+    model,
+    val_ratio: float,
+    test_ratio: float,
+    seed: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
+    """
+    Split PhraseBank into train/val/test, then append pseudo-labeled rows to train only.
+
+    Splits are computed on PhraseBank (after an optional FinBERT label remap on the
+    whole PhraseBank frame). Pseudo rows are never included in val or test.
+    """
+    df_pb_split = df_pb.copy()
+    if model_uses_finbert_label_order(model):
+        df_pb_split = phrasebank_labels_to_finbert(df_pb_split)
+
+    train_pb, val_df, test_df = split_labeled_frame(
+        df_pb_split,
+        val_ratio=val_ratio,
+        test_ratio=test_ratio,
+        seed=seed,
+    )
+
+    if df_pseudo is not None and not df_pseudo.empty:
+        df_p_train = df_pseudo.copy()
+        if model_uses_finbert_label_order(model):
+            df_p_train = phrasebank_labels_to_finbert(df_p_train)
+        train_df = pd.concat([train_pb, df_p_train], ignore_index=True)
+        train_df = train_df.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+    else:
+        train_df = train_pb
+
+    return train_df, val_df, test_df
 
 
 def _classifier_linear(model: torch.nn.Module) -> torch.nn.Linear:
@@ -262,34 +301,25 @@ def main() -> None:
         pb_path = ensure_finphrasebank()
     df_pb = load_finphrasebank_dataframe(pb_path)
 
-    frames = [df_pb]
+    df_p: pd.DataFrame | None = None
     # If pseudo_data is provided, load the labeled table
     if args.pseudo_data:
         # Load the labeled table
         df_p = load_labeled_table(args.pseudo_data)
         # If the pseudo_weight is not 1.0, sample the labeled table
-        if args.pseudo_weight != 1.0:
-            # Calculate the number of rows to sample
-            n = max(1, int(len(df_p) * args.pseudo_weight))
-            # Sample the labeled table
-            df_p = df_p.sample(n=n, random_state=args.seed, replace=len(df_p) < n)
-        frames.append(df_p)
+        if args.pseudo_weight != 1.0 and not df_p.empty:
+            n = int(len(df_p) * args.pseudo_weight)
+            if n <= 0:
+                df_p = df_p.sample(n=0, random_state=args.seed)
+            else:
+                df_p = df_p.sample(n=n, random_state=args.seed, replace=len(df_p) < n)
 
-    # Concatenate the frames
-    df = pd.concat(frames, ignore_index=True)
-    # Shuffle the data
-    df = df.sample(frac=1.0, random_state=args.seed).reset_index(drop=True)
-
-    # Build the model and tokenizer
     model, tokenizer = build_model_and_tokenizer(args.base_model, args.mlm_checkpoint)
-    # If the model uses the FinBERT label order, convert the labels to FinBERT labels
-    if model_uses_finbert_label_order(model):
-        # Convert the labels to FinBERT labels
-        df = phrasebank_labels_to_finbert(df)
 
-    # Split the data into train/val/test
-    train_df, val_df, test_df = split_labeled_frame(
-        df,
+    train_df, val_df, test_df = prepare_train_val_test_dataframes(
+        df_pb,
+        df_p,
+        model=model,
         val_ratio=args.val_ratio,
         test_ratio=args.test_ratio,
         seed=args.seed,
@@ -426,7 +456,7 @@ def main() -> None:
     # Create the data summary
     data_summary = {
         "phrasebank_rows": int(len(df_pb)),
-        "pseudo_rows": int(len(df) - len(df_pb)),
+        "pseudo_rows": int(len(df_p)) if df_p is not None else 0,
         "train_rows": int(len(train_df)),
         "val_rows": int(len(val_df)),
         "test_rows": int(len(test_df)) if test_df is not None else 0,

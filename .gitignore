@@ -36,3 +36,15 @@ coverage.xml
 
 # Type checking
 .mypy_cache/
+
+# Terraform local build artifacts
+infra/terraform/build/
+infra/terraform/terraform.tfvars
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+# Terraform state and other local artifacts (never commit)
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
