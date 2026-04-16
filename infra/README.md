@@ -1,6 +1,6 @@
 # AWS inference slice (S3, SageMaker, API Gateway)
 
-This folder implements the �backwards-first� path: package a locally trained Hugging Face classifier, upload it to **S3**, deploy a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, and front it with an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
+This folder implements the "backwards-first" path: package a locally trained Hugging Face classifier, upload it to **S3**, deploy a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, and front it with an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
 
 ## Layout
 
