@@ -48,3 +48,6 @@ infra/terraform/.terraform.lock.hcl
 .terraform.tfstate.lock.info
 crash.log
 crash.*.log
+
+# Machine specific
+.DS_Store
