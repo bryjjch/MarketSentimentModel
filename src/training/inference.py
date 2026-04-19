@@ -1,3 +1,5 @@
+"""Batch inference for saved sequence-classification checkpoints (aligned with training defaults)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -81,7 +83,6 @@ class SentimentPredictor:
         pending_text: list[str] = []
 
         for i, raw in enumerate(text_list):
-            # If the text is empty or whitespace, set the error and return the PredictionRecord
             if not raw.strip():
                 out[i] = PredictionRecord(
                     text=raw,
@@ -90,16 +91,13 @@ class SentimentPredictor:
                     probabilities=None,
                     error="empty_or_whitespace_text",
                 )
-            # If the text is not empty or whitespace, add it to the pending list
             else:
                 pending_idx.append(i)
                 pending_text.append(raw)
 
-        # Process the pending text in batches
         for start in range(0, len(pending_text), batch_size):
             chunk = pending_text[start : start + batch_size]
             idx_chunk = pending_idx[start : start + batch_size]
-            # Tokenize the text
             enc: dict[str, Any] = self.tokenizer(
                 chunk,
                 padding=True,
@@ -107,15 +105,10 @@ class SentimentPredictor:
                 max_length=self.max_length,
                 return_tensors="pt",
             )
-            # Move the tokens to the device
             enc = {k: v.to(self.device) for k, v in enc.items()}
-            # Get the logits from the model
             logits = self.model(**enc).logits
-            # Get the probabilities from the logits
             probs = torch.softmax(logits, dim=-1).cpu().numpy()
-            # Get the predicted IDs from the probabilities
             pred_ids = probs.argmax(axis=-1)
-            # For each row in the batch, set the PredictionRecord
             for j, row_i in enumerate(idx_chunk):
                 pid = int(pred_ids[j])
                 out[row_i] = PredictionRecord(

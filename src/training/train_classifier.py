@@ -69,27 +69,22 @@ def split_labeled_frame(
     If ``test_ratio`` > 0, first hold out a test fraction, then split the remainder
     into train/val with ``val_ratio`` as the validation fraction of that remainder.
     """
-    # Stratify the data by the label column
     strat = None
     if label_column in df.columns:
         vc = df[label_column].value_counts()
         strat = df[label_column] if vc.min() >= 2 else None
 
-    # If test_ratio is greater than 0, split the data into train/val/test
     if test_ratio and test_ratio > 0:
-        # Split the data into train/val/test
         train_val_df, test_df = train_test_split(
             df,
             test_size=test_ratio,
             random_state=seed,
             stratify=strat,
         )
-        # Stratify the data by the label column
         strat2 = None
         if label_column in train_val_df.columns:
             vc2 = train_val_df[label_column].value_counts()
             strat2 = train_val_df[label_column] if vc2.min() >= 2 else None
-        # Split the data into train/val
         train_df, val_df = train_test_split(
             train_val_df,
             test_size=val_ratio,
@@ -98,7 +93,6 @@ def split_labeled_frame(
         )
         return train_df, val_df, test_df
 
-    # Split the data into train/val
     train_df, val_df = train_test_split(
         df,
         test_size=val_ratio,
@@ -147,7 +141,7 @@ def prepare_train_val_test_dataframes(
 
 
 def _classifier_linear(model: torch.nn.Module) -> torch.nn.Linear:
-    """Get the linear classification head from the model"""
+    """Return the final ``Linear`` used for classification (BERT-style ``.classifier`` or its last layer)."""
     head = getattr(model, "classifier", None)
     if isinstance(head, torch.nn.Linear):
         return head
@@ -159,13 +153,12 @@ def _classifier_linear(model: torch.nn.Module) -> torch.nn.Linear:
 
 
 def model_uses_finbert_label_order(model) -> bool:
-    """Check if the model uses the FinBERT label order"""
+    """True when ``id2label`` matches ProsusAI FinBERT (0=positive, 1=negative, 2=neutral)."""
     id2 = model.config.id2label or {}
     if len(id2) != 3:
         return False
 
     def name(i: int) -> str:
-        """Get the label name for a given index"""
         v = id2.get(i, id2.get(str(i)))
         return str(v).lower() if v is not None else ""
 
@@ -173,14 +166,14 @@ def model_uses_finbert_label_order(model) -> bool:
 
 
 def phrasebank_labels_to_finbert(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert PhraseBank labels to FinBERT labels"""
+    """Remap PhraseBank 0/1/2 ids to FinBERT's label order via ``PHRASEBANK_TO_FINBERT_LABEL``."""
     out = df.copy()
     out["label"] = out["label"].map(PHRASEBANK_TO_FINBERT_LABEL)
     return out
 
 
 def permute_classifier_to_phrasebank(model) -> None:
-    """Permute the classifier to PhraseBank labels"""
+    """Reorder classifier rows and ``id2label`` so saved artifacts use PhraseBank 0/1/2 semantics."""
     linear = _classifier_linear(model)
     perm = torch.tensor(_FINBERT_ROW_PERMUTE, dtype=torch.long)
     linear.weight.data = linear.weight.data[perm]
@@ -258,11 +251,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def build_model_and_tokenizer(base_model: str, mlm_checkpoint: str | None):
-    """Build the model and tokenizer"""
+    """Load tokenizer + 3-way classifier; optionally warm-start the encoder from ``--mlm_checkpoint``."""
     tokenizer = AutoTokenizer.from_pretrained(base_model)
     model = AutoModelForSequenceClassification.from_pretrained(base_model, num_labels=3)
 
-    # Load the MLM checkpoint if provided
     if mlm_checkpoint:
         mlm = AutoModelForMaskedLM.from_pretrained(mlm_checkpoint)
         if not hasattr(model, "bert"):
@@ -273,9 +265,9 @@ def build_model_and_tokenizer(base_model: str, mlm_checkpoint: str | None):
 
 
 def tokenize_dataset(ds: Dataset, tokenizer, max_length: int) -> Dataset:
-    """Tokenize the dataset"""
+    """Map ``text`` to tokenizer outputs (no padding here; collator pads batches)."""
+
     def _tok(batch):
-        """Tokenize the batch"""
         return tokenizer(
             batch["text"],
             truncation=True,
@@ -287,26 +279,19 @@ def tokenize_dataset(ds: Dataset, tokenizer, max_length: int) -> Dataset:
 
 
 def main() -> None:
-    """Main function"""
-    # Parse the arguments
+    """CLI entry: train, optionally remap FinBERT heads, evaluate, and write manifest."""
     args = parse_args(None)
-    # Set the seed for the random number generators
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    # Get the path to the PhraseBank text file
     pb_path = args.phrasebank_txt
-    # If the path is not provided, download the PhraseBank text file
     if pb_path is None:
         pb_path = ensure_finphrasebank()
     df_pb = load_finphrasebank_dataframe(pb_path)
 
     df_p: pd.DataFrame | None = None
-    # If pseudo_data is provided, load the labeled table
     if args.pseudo_data:
-        # Load the labeled table
         df_p = load_labeled_table(args.pseudo_data)
-        # If the pseudo_weight is not 1.0, sample the labeled table
         if args.pseudo_weight != 1.0 and not df_p.empty:
             n = int(len(df_p) * args.pseudo_weight)
             if n <= 0:
@@ -325,20 +310,17 @@ def main() -> None:
         seed=args.seed,
     )
 
-    # Create the datasets
     train_ds = Dataset.from_pandas(train_df[["text", "label"]].reset_index(drop=True))
     val_ds = Dataset.from_pandas(val_df[["text", "label"]].reset_index(drop=True))
-    # Tokenize the datasets
     train_tok = tokenize_dataset(train_ds, tokenizer, args.max_length)
     val_tok = tokenize_dataset(val_ds, tokenizer, args.max_length)
 
-    # If test_df is not None, tokenize the test dataset
     test_tok = None
     if test_df is not None:
         test_ds = Dataset.from_pandas(test_df[["text", "label"]].reset_index(drop=True))
         test_tok = tokenize_dataset(test_ds, tokenizer, args.max_length)
 
-    # Remove the token type IDs column from the datasets
+    # Single-sequence classification: strip token_type_ids when the tokenizer provides it.
     for col in ("token_type_ids",):
         if col in train_tok.column_names:
             train_tok = train_tok.remove_columns(col)
@@ -347,20 +329,16 @@ def main() -> None:
         if test_tok is not None and col in test_tok.column_names:
             test_tok = test_tok.remove_columns(col)
 
-    # Rename the label column to labels
     train_tok = train_tok.rename_column("label", "labels")
     val_tok = val_tok.rename_column("label", "labels")
     if test_tok is not None:
         test_tok = test_tok.rename_column("label", "labels")
 
-    # Create the data collator
     collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    # Create the output directory
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Calculate the warmup steps
     warmup_steps = trainer_warmup_steps(
         num_train_examples=len(train_tok),
         per_device_train_batch_size=args.train_batch_size,
@@ -369,7 +347,6 @@ def main() -> None:
         warmup_ratio=args.warmup_ratio,
     )
 
-    # Create the training arguments
     targs = TrainingArguments(
         output_dir=str(out_dir),
         num_train_epochs=args.num_train_epochs,
@@ -389,7 +366,6 @@ def main() -> None:
         report_to="none",
     )
 
-    # Create the trainer
     trainer = Trainer(
         model=model,
         args=targs,
@@ -400,60 +376,39 @@ def main() -> None:
         compute_metrics=metrics_from_eval_pred,
     )
 
-    # Train the model
     trainer.train()
-    # If the model uses the FinBERT label order, permute the classifier to PhraseBank labels
     if model_uses_finbert_label_order(model):
         permute_classifier_to_phrasebank(model)
 
-    # Evaluate the model
     eval_run = trainer.evaluate(val_tok)
-    # Create the evaluation metrics
     eval_metrics = {
         k: float(v)
         for k, v in eval_run.items()
         if isinstance(v, (int, float)) and "runtime" not in k.lower()
     }
 
-    # Predict the labels for the validation dataset
     val_pred = trainer.predict(val_tok)
-    # Create the validation labels
     val_labels = np.asarray(val_pred.label_ids).astype(int).ravel()
-    # Create the validation logits
     val_logits = val_pred.predictions
-    # Create the validation predictions
     val_preds = np.argmax(val_logits, axis=-1)
-    # Create the validation confusion matrix
     val_cm = confusion_matrix_list(val_labels, val_preds)
 
-    # Create the test metrics
     test_metrics_flat: dict[str, float] = {}
-    # Create the test confusion matrix
     test_cm = None
     if test_tok is not None:
-        # Predict the labels for the test dataset
         test_pred = trainer.predict(test_tok)
-        # Create the test labels
         t_labels = np.asarray(test_pred.label_ids).astype(int).ravel()
-        # Create the test logits
         t_logits = test_pred.predictions
-        # Create the test predictions
         t_p = np.argmax(t_logits, axis=-1)
-        # Create the test metrics
         test_metrics_flat = {
             f"test_{k}": float(v) for k, v in classification_metrics(t_labels, t_p).items()
         }
-        # Create the test confusion matrix
         test_cm = confusion_matrix_list(t_labels, t_p)
 
-    # Save the model
     trainer.save_model(str(out_dir))
-    # Save the tokenizer
     tokenizer.save_pretrained(str(out_dir))
-    # Print the saved classifier
     print(f"Saved classifier to {out_dir.resolve()}")
 
-    # Create the data summary
     data_summary = {
         "phrasebank_rows": int(len(df_pb)),
         "pseudo_rows": int(len(df_p)) if df_p is not None else 0,
@@ -461,9 +416,7 @@ def main() -> None:
         "val_rows": int(len(val_df)),
         "test_rows": int(len(test_df)) if test_df is not None else 0,
     }
-    # Get the best validation metric
     best_val = trainer.state.best_metric
-    # Build the training manifest
     manifest = build_training_manifest(
         run_configuration=args_namespace_to_dict(args),
         validation_metrics=eval_metrics,
@@ -475,9 +428,7 @@ def main() -> None:
         best_metric_value=float(best_val) if best_val is not None else None,
         data_summary=data_summary,
     )
-    # Write the training manifest
     manifest_path = write_training_manifest(out_dir, manifest)
-    # Print the path to the training manifest
     print(f"Wrote run manifest to {manifest_path.resolve()}")
 
 

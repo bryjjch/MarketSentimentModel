@@ -33,10 +33,11 @@ def trainer_warmup_steps(
 
     ``TrainingArguments.warmup_ratio`` is deprecated in favor of ``warmup_steps``; this
     mirrors ``Trainer.set_initial_training_values`` (dataloader length + grad accumulation).
+    Per-device batch size and gradient accumulation are clamped to at least 1, matching
+    Trainer's safe defaults when arguments are underspecified.
     """
     if warmup_ratio <= 0:
         return 0
-    # Ensure the batch size is at least 1
     per_device_bs = max(1, int(per_device_train_batch_size))
     grad_accum = max(1, int(gradient_accumulation_steps))
     len_dataloader = max(1, math.ceil(num_train_examples / per_device_bs))
@@ -83,7 +84,7 @@ def ensure_finphrasebank(
 
 
 def load_finphrasebank_dataframe(txt_path: Path | None = None) -> pd.DataFrame:
-    """Load the Financial PhraseBank data into a pandas dataframe"""
+    """Load PhraseBank from tab-separated ``@`` files using ISO-8859-1 (dataset encoding)."""
     path = txt_path or ensure_finphrasebank()
     df = pd.read_csv(
         path,

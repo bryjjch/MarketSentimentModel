@@ -20,3 +20,9 @@ sagemaker_serverless_max_concurrency   = 10
 # apigateway_throttle_rate_limit  = 10
 # apigateway_throttle_burst_limit = 20
 # lambda_reserved_concurrent_executions = 5
+#
+# Sentiment orchestration + DynamoDB cache (optional):
+# reddit_credentials_secret_arn = "arn:aws:secretsmanager:region:account:secret:name"
+# sentiment_cache_ttl_seconds     = 604800
+# sentiment_refresh_schedule      = "rate(1 hour)"
+# top_tickers_json                = "[\"AAPL\",\"MSFT\",\"GOOGL\"]"

@@ -78,3 +78,27 @@ variable "s3_force_destroy" {
   description = "If true, empty and delete the model bucket on terraform destroy (dev only)."
   default     = false
 }
+
+variable "reddit_credentials_secret_arn" {
+  type        = string
+  description = "Optional Secrets Manager ARN; secret must be JSON {\"client_id\":\"...\",\"client_secret\":\"...\"} for Reddit API (include_social). Leave empty to disable Reddit."
+  default     = ""
+}
+
+variable "sentiment_cache_ttl_seconds" {
+  type        = number
+  description = "Unix seconds added to refresh time for DynamoDB expires_at (TTL cleanup)."
+  default     = 604800
+}
+
+variable "sentiment_refresh_schedule" {
+  type        = string
+  description = "EventBridge rate or cron for cache refresh (e.g. rate(1 hour))."
+  default     = "rate(1 hour)"
+}
+
+variable "top_tickers_json" {
+  type        = string
+  description = "JSON array of tickers stored in SSM at /{project_name}/top-tickers for the refresher."
+  default     = "[\"AAPL\",\"MSFT\",\"GOOGL\"]"
+}

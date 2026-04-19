@@ -107,19 +107,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    # Validate the training files
     train_paths = [Path(x) for x in args.train_files]
     for p in train_paths:
         if not p.is_file():
             raise FileNotFoundError(p)
 
-    # Build the dataset
     raw_ds = build_dataset(train_paths, args.text_key)
-    # Load the tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     model = AutoModelForMaskedLM.from_pretrained(args.model_name)
 
-    # Tokenize the dataset
     def tokenize(batch):
         """Tokenize the dataset"""
         return tokenizer(
@@ -136,7 +132,6 @@ def main() -> None:
         remove_columns=raw_ds.column_names,
     )
 
-    # Create the data collator
     collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm=True,
@@ -154,7 +149,6 @@ def main() -> None:
         warmup_ratio=args.warmup_ratio,
     )
 
-    # Create the training arguments
     training_args = TrainingArguments(
         output_dir=str(out_dir),
         num_train_epochs=args.num_train_epochs,
@@ -173,7 +167,6 @@ def main() -> None:
         report_to="none",
     )
 
-    # Create the trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -181,9 +174,7 @@ def main() -> None:
         data_collator=collator,
         processing_class=tokenizer,
     )
-    # Train the model
     trainer.train()
-    # Save the model and tokenizer
     trainer.save_model(str(out_dir))
     tokenizer.save_pretrained(str(out_dir))
     print(f"Saved MLM checkpoint to {out_dir.resolve()}")

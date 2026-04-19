@@ -14,7 +14,7 @@ _MANIFEST_NAME = "training_manifest.json"
 
 
 def _git_revision(cwd: Path | None = None) -> str | None:
-    """Get the Git revision of the repository."""
+    """Return ``git rev-parse HEAD`` when available (manifest provenance); ``None`` if not a git checkout."""
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
@@ -28,7 +28,7 @@ def _git_revision(cwd: Path | None = None) -> str | None:
 
 
 def _library_versions() -> dict[str, str]:
-    """Get the versions of the libraries used in the training run."""
+    """Pin torch/transformers and common scientific stack versions for reproducibility debugging."""
     import importlib.metadata
 
     import torch
@@ -61,7 +61,7 @@ def build_training_manifest(
     data_summary: dict[str, Any] | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Assemble a JSON-serializable manifest dict."""
+    """Assemble ``training_manifest.json`` payload: config, metrics, matrices, and environment metadata."""
     root = repo_root or Path(__file__).resolve().parent.parent.parent
     manifest: dict[str, Any] = {
         "schema_version": 1,

@@ -20,6 +20,7 @@ SENTIMENT_ID_TO_STR = {0: "negative", 1: "neutral", 2: "positive"}
 
 
 def _prob_dict(probs_row: np.ndarray) -> dict[str, float]:
+    """Map label indices to human-readable probability keys."""
     return {SENTIMENT_ID_TO_STR[i]: float(probs_row[i]) for i in range(len(probs_row))}
 
 
@@ -31,6 +32,7 @@ def _record(
     probabilities: dict[str, float] | None,
     error: str | None,
 ) -> dict[str, Any]:
+    """One JSON object per input text (matches training ``PredictionRecord`` fields)."""
     return {
         "text": text,
         "label_id": label_id,
@@ -42,6 +44,7 @@ def _record(
 
 
 def model_fn(model_dir: str) -> dict[str, Any]:
+    """Load tokenizer and model; return a context dict for ``predict_fn``."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     model = AutoModelForSequenceClassification.from_pretrained(model_dir)
@@ -56,12 +59,11 @@ def model_fn(model_dir: str) -> dict[str, Any]:
 
 
 def input_fn(request_body: bytes | str, request_content_type: str) -> list[str]:
+    """Parse JSON body: either ``{"texts": [...]}`` or ``{"text": "..."}``."""
     if request_content_type and "json" not in request_content_type.lower():
         raise ValueError(f"Unsupported content type: {request_content_type!r} (expected JSON)")
-
     raw = request_body.decode("utf-8") if isinstance(request_body, bytes) else request_body
     payload = json.loads(raw)
-
     if "texts" in payload:
         texts = payload["texts"]
         if not isinstance(texts, list):
@@ -74,12 +76,12 @@ def input_fn(request_body: bytes | str, request_content_type: str) -> list[str]:
 
 
 def predict_fn(text_list: list[str], context: dict[str, Any]) -> list[dict[str, Any]]:
+    """Batch inference with empty-string short-circuit (same semantics as ``SentimentPredictor``)."""
     model = context["model"]
     tokenizer = context["tokenizer"]
     device: torch.device = context["device"]
     max_length: int = context["max_length"]
     batch_size = 32
-
     out: list[dict[str, Any] | None] = [None] * len(text_list)
     pending_idx: list[int] = []
     pending_text: list[str] = []
@@ -128,6 +130,7 @@ def predict_fn(text_list: list[str], context: dict[str, Any]) -> list[dict[str, 
 
 
 def output_fn(prediction: list[dict[str, Any]], response_content_type: str) -> bytes:
+    """Serialize predictions as UTF-8 JSON bytes."""
     if response_content_type and "json" not in response_content_type.lower():
         raise ValueError(f"Unsupported accept type: {response_content_type!r}")
     return json.dumps(prediction).encode("utf-8")

@@ -26,3 +26,23 @@ output "predict_url" {
   description = "Full URL for POST /predict"
   value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/predict"
 }
+
+output "sentiment_by_symbol_url" {
+  description = "Full URL for POST /sentiment/by-symbol (JSON body: symbol, optional options)"
+  value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/sentiment/by-symbol"
+}
+
+output "sentiment_cache_read_url_template" {
+  description = "GET cached snapshot: append symbol (e.g. .../sentiment/cache/AAPL)"
+  value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/sentiment/cache/{symbol}"
+}
+
+output "sentiment_cache_table_name" {
+  description = "DynamoDB table for precomputed per-symbol sentiment"
+  value       = aws_dynamodb_table.sentiment_cache.name
+}
+
+output "sentiment_refresh_rule_name" {
+  description = "EventBridge rule name for scheduled cache refresh"
+  value       = aws_cloudwatch_event_rule.sentiment_refresh.name
+}
