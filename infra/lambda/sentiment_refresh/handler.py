@@ -26,7 +26,7 @@ _ddb = boto3.resource("dynamodb")
 
 
 def _load_tickers() -> list[str]:
-    """Helper function to load the tickers from the SSM parameter or the default tickers."""
+    """Resolve ticker list from SSM JSON (if configured) with JSON/env fallbacks."""
     if TOP_TICKERS_SSM_PARAM:
         try:
             r = _ssm.get_parameter(Name=TOP_TICKERS_SSM_PARAM)
@@ -46,7 +46,7 @@ def _load_tickers() -> list[str]:
 
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
-    """Lambda handler for the sentiment refresh."""
+    """Invoke sentiment Lambda per ticker and refresh DynamoDB cache rows."""
     tickers = _load_tickers()
     table = _ddb.Table(TABLE_NAME)
     now = int(time.time())

@@ -18,7 +18,8 @@ def aggregate_predictions(records: list[dict[str, Any]]) -> tuple[float, str, in
     Return (score, label, analyzed_count).
 
     score: mean of (P_positive - P_negative) over successfully analyzed texts.
-    label: categorical bucket from that mean (thresholds on score).
+    label: ``positive`` / ``negative`` / ``neutral`` from that mean using symmetric
+    thresholds at ±0.12 on the same scale (tuned for probability-derived scores in ~[-1, 1]).
     analyzed_count: number of non-error predictions included.
     """
     valid: list[dict[str, Any]] = []
@@ -35,7 +36,6 @@ def aggregate_predictions(records: list[dict[str, Any]]) -> tuple[float, str, in
     scores = [sentiment_score_from_probabilities(r["probabilities"]) for r in valid]
     mean_score = sum(scores) / len(scores)
 
-    # Thresholds on the probability-derived score (same scale as [-1, 1]-ish)
     if mean_score > 0.12:
         label = "positive"
     elif mean_score < -0.12:

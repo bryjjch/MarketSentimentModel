@@ -82,7 +82,7 @@ def read_jsonl_texts(path: Path, text_key: str, limit: int) -> list[str]:
 
 
 def normalize_label(raw: str) -> int | None:
-    """Normalize label to an integer"""
+    """Map model text to 0/1/2: prefer whole-word sentiment tokens, else stripped alphanumeric lookup."""
     low = raw.strip().lower()
     for word, lid in (("negative", 0), ("neutral", 1), ("positive", 2)):
         if re.search(rf"\b{word}\b", low):
@@ -178,7 +178,6 @@ def main() -> None:
     if args.provider == "google" and not google_api_key():
         raise EnvironmentError("GOOGLE_API_KEY or GEMINI_API_KEY is not set (Google AI Studio)")
 
-    # Read the texts from the input file
     texts = read_jsonl_texts(args.input, args.text_key, args.limit)
     if not texts:
         raise ValueError("No texts found in input")
@@ -191,9 +190,7 @@ def main() -> None:
     n_skip = 0
     n_fail = 0
 
-    # Open the output file
     with args.output.open(mode, encoding="utf-8") as out:
-        # Iterate over the texts and label them
         for i, raw_text in enumerate(texts):
             if raw_text in done:
                 n_skip += 1

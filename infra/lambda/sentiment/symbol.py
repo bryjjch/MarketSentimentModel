@@ -9,7 +9,7 @@ _SYMBOL_RE = re.compile(r"^[A-Z]{1,5}$")
 
 
 def normalize_symbol(raw: str | None) -> str | None:
-    """Normalize a ticker symbol."""
+    """Uppercase strip; return ``None`` unless it matches ``_SYMBOL_RE`` (1-5 Latin letters)."""
     if raw is None:
         return None
     s = raw.strip().upper()

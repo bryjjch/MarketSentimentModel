@@ -1,4 +1,8 @@
-"""Classification metrics for validation / test."""
+"""Classification metrics for validation / test.
+
+Metrics are flattened to scalar keys (including per-class and confusion-matrix cells) so they
+serialize cleanly in Hugging Face logs and ``training_manifest.json``.
+"""
 
 from __future__ import annotations
 
@@ -28,14 +32,10 @@ def classification_metrics(
     y_pred = np.asarray(y_pred).astype(int).ravel()
     labels = list(range(num_labels))
 
-    # Calculate the accuracy
     acc = float(accuracy_score(y_true, y_pred))
-    # Calculate the macro F1 score
     macro_f1 = float(f1_score(y_true, y_pred, average="macro", labels=labels, zero_division=0))
-    # Calculate the weighted F1 score
     weighted_f1 = float(f1_score(y_true, y_pred, average="weighted", labels=labels, zero_division=0))
-    
-    # Calculate the precision, recall, and F1 score for each label
+
     prec, rec, f1, _ = precision_recall_fscore_support(
         y_true, y_pred, average=None, labels=labels, zero_division=0
     )
@@ -46,16 +46,13 @@ def classification_metrics(
         "precision_macro": float(np.mean(prec)),
         "recall_macro": float(np.mean(rec)),
     }
-    # For each label, add the precision, recall, and F1 score to the output
     for i in range(num_labels):
         name = label_names[i] if i < len(label_names) else str(i)
         out[f"precision_{name}"] = float(prec[i])
         out[f"recall_{name}"] = float(rec[i])
         out[f"f1_{name}"] = float(f1[i])
 
-    # Calculate the confusion matrix
     cm = confusion_matrix(y_true, y_pred, labels=labels)
-    # For each label, add the confusion matrix cell to the output
     for i in range(num_labels):
         for j in range(num_labels):
             out[f"cm_{i}_{j}"] = float(cm[i, j])

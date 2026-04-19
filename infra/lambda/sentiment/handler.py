@@ -25,7 +25,7 @@ _JSON_HEADERS = {"Content-Type": "application/json"}
 
 
 def _response(status: int, body: dict[str, Any]) -> dict[str, Any]:
-    """Helper function to return a response with the given status and body."""
+    """HTTP API v2 proxy response shape (JSON body)."""
     return {
         "statusCode": status,
         "headers": _JSON_HEADERS,
@@ -34,7 +34,7 @@ def _response(status: int, body: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_api_body(event: dict[str, Any]) -> dict[str, Any]:
-    """Helper function to parse the API body."""
+    """Decode optional base64 body and parse JSON; invalid JSON yields ``{}``."""
     raw_body = event.get("body")
     if raw_body in (None, ""):
         return {}
@@ -145,7 +145,7 @@ def run_sentiment(symbol: str, options: dict[str, Any] | None) -> dict[str, Any]
 
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
-    """Lambda handler for the sentiment API."""
+    """Route direct Lambda invoke vs HTTP POST; map SageMaker errors to HTTP status codes."""
     # Direct invocation (refresher): { "symbol": "AAPL", "options": { ... } }
     if "requestContext" not in event:
         raw_sym = event.get("symbol")

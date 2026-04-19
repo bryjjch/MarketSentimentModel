@@ -1,4 +1,4 @@
-"""GET /sentiment/cache/{symbol} � read precomputed snapshot from DynamoDB."""
+"""GET /sentiment/cache/{symbol} - read precomputed snapshot from DynamoDB."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ _JSON = {"Content-Type": "application/json"}
 
 
 def _json_safe(obj: Any) -> Any:
-    """Helper function to convert the object to a JSON safe object."""
+    """Recursively convert DynamoDB types (e.g. ``Decimal``) for ``json.dumps``."""
     if isinstance(obj, dict):
         return {k: _json_safe(v) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -27,7 +27,7 @@ def _json_safe(obj: Any) -> Any:
 
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
-    """Lambda handler for the cache read."""
+    """Return the cached sentiment row for ``pathParameters.symbol`` or 404."""
     sym = (event.get("pathParameters") or {}).get("symbol") or ""
     sym = sym.strip().upper()
     if not sym:
