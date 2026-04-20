@@ -51,3 +51,7 @@ crash.*.log
 
 # Machine specific
 .DS_Store
+
+# Frontend (Vite)
+web/node_modules/
+web/dist/
