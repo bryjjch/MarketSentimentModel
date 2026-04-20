@@ -23,7 +23,7 @@ export function Heatmap({ apiBase, onRowsChange }: Props) {
     if (!apiBase) {
       setLoading(false)
       setError(
-        'Set VITE_API_BASE_URL in web/.env (HTTP API invoke URL from Terraform).',
+        'Set VITE_API_BASE_URL in web/.env.local (HTTP API invoke URL from Terraform).',
       )
       setRows([])
       onRowsChange?.([])
