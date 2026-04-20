@@ -77,7 +77,6 @@ def _scan_active_items(now: int, limit: int, cursor: dict[str, Any] | None) -> t
         kwargs["ExclusiveStartKey"] = cursor
     resp = _table.scan(**kwargs)
     items = resp.get("Items", [])
-    items.sort(key=lambda x: str(x.get("symbol", "")))
     return items, resp.get("LastEvaluatedKey")
 
 
