@@ -37,6 +37,11 @@ output "sentiment_cache_read_url_template" {
   value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/sentiment/cache/{symbol}"
 }
 
+output "sentiment_cache_list_url" {
+  description = "GET all active cached sentiment rows as a JSON array"
+  value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/sentiment/cache"
+}
+
 output "sentiment_cache_table_name" {
   description = "DynamoDB table for precomputed per-symbol sentiment"
   value       = aws_dynamodb_table.sentiment_cache.name

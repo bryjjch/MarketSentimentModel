@@ -20,6 +20,12 @@ resource "aws_apigatewayv2_integration" "cache_read" {
   payload_format_version = "2.0"
 }
 
+resource "aws_apigatewayv2_route" "get_sentiment_cache_all" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /sentiment/cache"
+  target    = "integrations/${aws_apigatewayv2_integration.cache_read.id}"
+}
+
 resource "aws_apigatewayv2_route" "get_sentiment_cache" {
   api_id    = aws_apigatewayv2_api.http.id
   route_key = "GET /sentiment/cache/{symbol}"

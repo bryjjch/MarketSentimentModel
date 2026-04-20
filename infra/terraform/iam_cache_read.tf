@@ -19,6 +19,7 @@ resource "aws_iam_role_policy" "cache_read_ddb" {
         Effect = "Allow"
         Action = [
           "dynamodb:GetItem",
+          "dynamodb:Scan",
         ]
         Resource = aws_dynamodb_table.sentiment_cache.arn
       },
