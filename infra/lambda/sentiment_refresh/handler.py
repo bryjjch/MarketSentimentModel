@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import time
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import boto3
@@ -23,6 +24,14 @@ DEFAULT_TICKERS_JSON = os.environ.get("DEFAULT_TICKERS_JSON", '["AAPL","MSFT","G
 _lambda = boto3.client("lambda")
 _ssm = boto3.client("ssm")
 _ddb = boto3.resource("dynamodb")
+
+
+def _to_ddb_number(value: Any, default: str = "0") -> Decimal:
+    """Convert numerics to DynamoDB-safe Decimal values."""
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(default)
 
 
 def _load_tickers() -> list[str]:
@@ -80,7 +89,7 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             table.put_item(
                 Item={
                     "symbol": sym,
-                    "score": body.get("score", 0),
+                    "score": _to_ddb_number(body.get("score", 0)),
                     "label": body.get("label", "neutral"),
                     "article_count": int(body.get("article_count", 0)),
                     "recent_headlines": body.get("recent_headlines", []),
