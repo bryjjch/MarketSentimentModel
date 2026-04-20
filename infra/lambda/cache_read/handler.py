@@ -97,7 +97,7 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                 "body": json.dumps({"error": "bad_request", "message": str(exc)}),
             }
         rows, next_key = _scan_active_items(now, limit, cursor)
-        headers = dict(_JSON)
+        headers = _JSON.copy()
         if next_key:
             headers["X-Next-Cursor"] = _encode_cursor(next_key)
         return {
