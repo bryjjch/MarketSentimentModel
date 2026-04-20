@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import time
@@ -9,11 +11,14 @@ from decimal import Decimal
 from typing import Any
 
 import boto3
+from boto3.dynamodb.conditions import Attr
 
 TABLE_NAME = os.environ["TABLE_NAME"]
 _table = boto3.resource("dynamodb").Table(TABLE_NAME)
 
 _JSON = {"Content-Type": "application/json"}
+_DEFAULT_LIST_LIMIT = 100
+_MAX_LIST_LIMIT = 500
 
 
 def _json_safe(obj: Any) -> Any:
@@ -27,39 +32,53 @@ def _json_safe(obj: Any) -> Any:
     return obj
 
 
-def _expires_at_int(item: dict[str, Any]) -> int | None:
-    """Convert DynamoDB expires_at to integer timestamp."""
-    raw = item.get("expires_at")
-    if raw is None:
+def _parse_list_limit(query: dict[str, str] | None) -> int:
+    """Parse and clamp requested list size."""
+    raw = (query or {}).get("limit")
+    if raw is None or raw == "":
+        return _DEFAULT_LIST_LIMIT
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError("limit must be an integer") from None
+    if value < 1:
+        raise ValueError("limit must be >= 1")
+    return min(value, _MAX_LIST_LIMIT)
+
+
+def _encode_cursor(key: dict[str, Any]) -> str:
+    """Encode DynamoDB LastEvaluatedKey to a URL-safe cursor string."""
+    payload = json.dumps(_json_safe(key), separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_cursor(raw: str | None) -> dict[str, Any] | None:
+    """Decode URL cursor back into DynamoDB ExclusiveStartKey."""
+    if not raw:
         return None
-    if isinstance(raw, Decimal):
-        return int(raw)
-    return int(raw)
+    try:
+        padding = "=" * (-len(raw) % 4)
+        data = base64.urlsafe_b64decode((raw + padding).encode("ascii"))
+        obj = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error):
+        raise ValueError("cursor is invalid") from None
+    if not isinstance(obj, dict):
+        raise ValueError("cursor is invalid")
+    return obj
 
 
-def _is_active(item: dict[str, Any], now: int) -> bool:
-    """Check if the item is active (expires_at is in the future)."""
-    exp = _expires_at_int(item)
-    if exp is None:
-        return True
-    return exp > now
-
-
-def _scan_active_items(now: int) -> list[dict[str, Any]]:
-    """Scan the table for active items."""
-    items: list[dict[str, Any]] = []
-    kwargs: dict[str, Any] = {}
-    while True:
-        resp = _table.scan(**kwargs)
-        for it in resp.get("Items", []):
-            if _is_active(it, now):
-                items.append(it)
-        lek = resp.get("LastEvaluatedKey")
-        if not lek:
-            break
-        kwargs["ExclusiveStartKey"] = lek
+def _scan_active_items(now: int, limit: int, cursor: dict[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Scan one page of active rows and return a pagination key when available."""
+    kwargs: dict[str, Any] = {
+        "FilterExpression": Attr("expires_at").not_exists() | Attr("expires_at").gt(Decimal(now)),
+        "Limit": limit,
+    }
+    if cursor:
+        kwargs["ExclusiveStartKey"] = cursor
+    resp = _table.scan(**kwargs)
+    items = resp.get("Items", [])
     items.sort(key=lambda x: str(x.get("symbol", "")))
-    return items
+    return items, resp.get("LastEvaluatedKey")
 
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
@@ -68,10 +87,23 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     sym = sym.strip().upper()
     if not sym:
         now = int(time.time())
-        rows = _scan_active_items(now)
+        query = event.get("queryStringParameters") or {}
+        try:
+            limit = _parse_list_limit(query)
+            cursor = _decode_cursor(query.get("cursor"))
+        except ValueError as exc:
+            return {
+                "statusCode": 400,
+                "headers": _JSON,
+                "body": json.dumps({"error": "bad_request", "message": str(exc)}),
+            }
+        rows, next_key = _scan_active_items(now, limit, cursor)
+        headers = dict(_JSON)
+        if next_key:
+            headers["X-Next-Cursor"] = _encode_cursor(next_key)
         return {
             "statusCode": 200,
-            "headers": _JSON,
+            "headers": headers,
             "body": json.dumps([_json_safe(item) for item in rows]),
         }
 
