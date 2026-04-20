@@ -29,7 +29,10 @@ _ddb = boto3.resource("dynamodb")
 def _to_ddb_number(value: Any, default: str = "0") -> Decimal:
     """Convert numerics to DynamoDB-safe Decimal values."""
     try:
-        return Decimal(str(value))
+        d = Decimal(str(value))
+        if d.is_nan() or d.is_infinite():
+            return Decimal(default)
+        return d
     except (InvalidOperation, TypeError, ValueError):
         return Decimal(default)
 
