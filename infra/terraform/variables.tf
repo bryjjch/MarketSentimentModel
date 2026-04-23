@@ -102,3 +102,105 @@ variable "top_tickers_json" {
   description = "JSON array of tickers stored in SSM at /{project_name}/top-tickers for the refresher."
   default     = "[\"AAPL\",\"MSFT\",\"GOOGL\"]"
 }
+
+# --- Data bucket + daily ingestion / pseudo-labeling pipeline ---------------
+
+variable "data_bucket_name" {
+  type        = string
+  description = "Globally unique S3 bucket name for the data pipeline (raw/predictions/pseudo/curated). If null, uses project_name-data-account_id."
+  default     = null
+}
+
+variable "data_retention_days" {
+  type        = number
+  description = "Lifecycle expiration (days) for raw/ and predictions/ partitions. Pseudo/curated are retained indefinitely. Set to 0 to disable."
+  default     = 90
+}
+
+variable "ingestion_schedule" {
+  type        = string
+  description = "EventBridge rate/cron that triggers the daily ingestion Lambda (e.g. 'cron(0 13 * * ? *)' for 13:00 UTC)."
+  default     = "cron(0 13 * * ? *)"
+}
+
+variable "ingestion_max_articles" {
+  type        = number
+  description = "Max articles per ticker during daily ingestion."
+  default     = 20
+}
+
+variable "ingestion_include_social" {
+  type        = bool
+  description = "Whether daily ingestion should include Reddit (requires reddit_credentials_secret_arn)."
+  default     = true
+}
+
+variable "sagemaker_batch_size" {
+  type        = number
+  description = "Batch size the prediction Lambda uses per InvokeEndpoint call."
+  default     = 32
+}
+
+variable "low_conf_top_prob" {
+  type        = number
+  description = "Top-class probability threshold below which a prediction is routed to pseudo-labeling (0.0 to 1.0)."
+  default     = 0.65
+}
+
+variable "low_conf_margin" {
+  type        = number
+  description = "Minimum margin (top-prob - runner-up) required for a confident prediction; 0 disables the margin gate."
+  default     = 0.0
+}
+
+variable "llm_provider" {
+  type        = string
+  description = "Pseudo-labeling provider ('openai', 'google', or 'echo')."
+  default     = "openai"
+  validation {
+    condition     = contains(["openai", "google", "echo"], var.llm_provider)
+    error_message = "llm_provider must be one of: openai, google, echo."
+  }
+}
+
+variable "llm_model" {
+  type        = string
+  description = "Optional pseudo-labeling model id (e.g. gpt-4o-mini, gemini-2.0-flash). Empty picks the provider default."
+  default     = ""
+}
+
+variable "openai_secret_arn" {
+  type        = string
+  description = "Optional Secrets Manager ARN for OpenAI API key (JSON with {\"api_key\":\"...\"}). Leave empty to disable."
+  default     = ""
+}
+
+variable "google_secret_arn" {
+  type        = string
+  description = "Optional Secrets Manager ARN for Google AI Studio API key (JSON with {\"api_key\":\"...\"}). Leave empty to disable."
+  default     = ""
+}
+
+variable "ingestion_lambda_memory_mb" {
+  type        = number
+  description = "Memory (MB) for the daily ingestion Lambda."
+  default     = 512
+}
+
+variable "prediction_lambda_memory_mb" {
+  type        = number
+  description = "Memory (MB) for the prediction Lambda."
+  default     = 512
+}
+
+variable "pseudo_label_lambda_memory_mb" {
+  type        = number
+  description = "Memory (MB) for the pseudo-label Lambda."
+  default     = 512
+}
+
+variable "disable_legacy_sentiment_refresh" {
+  type        = bool
+  description = "If true, the legacy sentiment_refresh Lambda + EventBridge rule are not created (the new ingestion pipeline replaces them)."
+  default     = true
+}
