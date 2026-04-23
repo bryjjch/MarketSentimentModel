@@ -3,6 +3,11 @@ Pre-training with masked language modeling on unlabeled financial text.
 
 Feed one or more JSONL files with a "text" field per line, or plain .txt files (one doc per line).
 
+Under SageMaker ``--train_files`` defaults to every ``.jsonl``/``.txt`` staged in the
+``train`` channel (``SM_CHANNEL_TRAIN``), ``--output_dir`` defaults to ``SM_MODEL_DIR``
+(auto-packed into ``model.tar.gz``), and HF Trainer checkpoints/logs go to
+``SM_OUTPUT_DATA_DIR/checkpoints`` so they are excluded from the model artifact.
+
 Example:
   python -m training.train_mlm --train_files data/wsb.jsonl data/reuters_lines.txt --output_dir outputs/mlm_bert
   finsense-train-mlm --train_files data/wsb.jsonl --output_dir outputs/mlm_bert
@@ -22,7 +27,27 @@ from transformers import (
     TrainingArguments,
 )
 
-from .common import trainer_warmup_steps
+from .common import (
+    sagemaker_channel_dir,
+    sagemaker_model_dir,
+    sagemaker_output_data_dir,
+    trainer_warmup_steps,
+)
+
+
+_MLM_TRAIN_FILE_SUFFIXES = (".jsonl", ".txt")
+
+
+def _default_train_files() -> list[Path] | None:
+    """Collect ``.jsonl``/``.txt`` files from the ``train`` SageMaker channel when set."""
+    channel = sagemaker_channel_dir("train")
+    if channel is None or not channel.is_dir():
+        return None
+    files = sorted(
+        p for p in channel.iterdir()
+        if p.is_file() and p.suffix.lower() in _MLM_TRAIN_FILE_SUFFIXES
+    )
+    return files or None
 
 
 def load_texts_from_jsonl(path: Path, text_key: str) -> list[str]:
@@ -76,14 +101,24 @@ def build_dataset(train_files: list[Path], text_key: str) -> Dataset:
     return ds
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments"""
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command line arguments (optional ``argv`` for tests)."""
+    train_files_default = _default_train_files()
+    model_dir_default = sagemaker_model_dir()
+    output_data_dir_default = sagemaker_output_data_dir()
+    checkpoint_default = (
+        output_data_dir_default / "checkpoints" if output_data_dir_default is not None else None
+    )
+
     p = argparse.ArgumentParser(description="Financial-domain MLM continued pre-training")
     p.add_argument(
         "--train_files",
         nargs="+",
-        required=True,
-        help="JSONL (object with text field) and/or .txt (one sentence/doc per line) files",
+        default=[str(x) for x in train_files_default] if train_files_default else None,
+        help=(
+            "JSONL (object with text field) and/or .txt (one sentence/doc per line) files. "
+            "Defaults to all .jsonl/.txt files in $SM_CHANNEL_TRAIN when set."
+        ),
     )
     p.add_argument("--text_key", default="text", help="JSONL field name for body text")
     p.add_argument(
@@ -91,7 +126,22 @@ def parse_args() -> argparse.Namespace:
         default="bert-base-uncased",
         help="Base checkpoint (use bert-base-uncased to stay compatible with FinBERT heads)",
     )
-    p.add_argument("--output_dir", required=True, help="Directory to save MLM weights + tokenizer")
+    p.add_argument(
+        "--output_dir",
+        default=str(model_dir_default) if model_dir_default is not None else None,
+        help=(
+            "Directory to save MLM weights + tokenizer. Defaults to $SM_MODEL_DIR when "
+            "set; required otherwise."
+        ),
+    )
+    p.add_argument(
+        "--checkpoint_dir",
+        default=str(checkpoint_default) if checkpoint_default is not None else None,
+        help=(
+            "Working directory for HF Trainer checkpoints and logs. Defaults to "
+            "$SM_OUTPUT_DATA_DIR/checkpoints when set, otherwise falls back to --output_dir."
+        ),
+    )
     p.add_argument("--max_length", type=int, default=512)
     p.add_argument("--mlm_probability", type=float, default=0.15)
     p.add_argument("--num_train_epochs", type=float, default=3.0)
@@ -102,11 +152,18 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--gradient_accumulation_steps", type=int, default=1)
     p.add_argument("--fp16", action="store_true", help="Use mixed precision (CUDA only)")
-    return p.parse_args()
+    args = p.parse_args(argv)
+    if not args.train_files:
+        p.error(
+            "--train_files is required (or stage .jsonl/.txt files in the SageMaker 'train' channel)"
+        )
+    if not args.output_dir:
+        p.error("--output_dir is required (or set SM_MODEL_DIR in the environment)")
+    return args
 
 
 def main() -> None:
-    args = parse_args()
+    args = parse_args(None)
     train_paths = [Path(x) for x in args.train_files]
     for p in train_paths:
         if not p.is_file():
@@ -140,6 +197,8 @@ def main() -> None:
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir = Path(args.checkpoint_dir) if args.checkpoint_dir else out_dir
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     warmup_steps = trainer_warmup_steps(
         num_train_examples=len(tokenized),
@@ -150,7 +209,7 @@ def main() -> None:
     )
 
     training_args = TrainingArguments(
-        output_dir=str(out_dir),
+        output_dir=str(checkpoint_dir),
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,

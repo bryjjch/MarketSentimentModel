@@ -7,8 +7,10 @@ Supports:
 - Merging pseudo-labeled JSONL/CSV (--pseudo_data); train/val/test splits are drawn from
   PhraseBank only, then pseudo rows are added to the training pool only
 
-Saves a Hugging Face model directory plus ``training_manifest.json``.
-Use ``training.inference.SentimentPredictor`` for aligned train/serve tokenization.
+Writes a deploy-ready Hugging Face model directory (weights, tokenizer, ``code/inference.py``,
+``training_manifest.json``) to ``--output_dir``. Under SageMaker ``--output_dir`` defaults to
+``SM_MODEL_DIR`` (auto-packed into ``model.tar.gz``) and intermediate checkpoints are kept in
+``SM_OUTPUT_DATA_DIR/checkpoints`` so they are excluded from the model artifact.
 
 Example:
   python -m training.train_classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
@@ -37,9 +39,13 @@ from transformers import (
 
 from .artifacts import args_namespace_to_dict, build_training_manifest, write_training_manifest
 from .common import (
+    copy_serving_code_into,
+    default_serving_code_dir,
     ensure_finphrasebank,
     load_finphrasebank_dataframe,
     load_labeled_table,
+    sagemaker_model_dir,
+    sagemaker_output_data_dir,
     trainer_warmup_steps,
 )
 from .evaluation import classification_metrics, confusion_matrix_list, metrics_from_eval_pred
@@ -185,6 +191,12 @@ def permute_classifier_to_phrasebank(model) -> None:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command line arguments (optional ``argv`` for tests)."""
+    model_dir_default = sagemaker_model_dir()
+    output_data_dir_default = sagemaker_output_data_dir()
+    checkpoint_default = (
+        output_data_dir_default / "checkpoints" if output_data_dir_default is not None else None
+    )
+
     p = argparse.ArgumentParser(description="Financial sentiment classifier fine-tuning")
     p.add_argument(
         "--base_model",
@@ -208,7 +220,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=1.0,
         help="Relative sampling weight for pseudo rows vs PhraseBank when merging",
     )
-    p.add_argument("--output_dir", required=True, help="Where to save tokenizer + classifier")
+    p.add_argument(
+        "--output_dir",
+        default=str(model_dir_default) if model_dir_default is not None else None,
+        help=(
+            "Deploy-ready model directory (packed by SageMaker into model.tar.gz). "
+            "Defaults to $SM_MODEL_DIR when set; required otherwise."
+        ),
+    )
+    p.add_argument(
+        "--checkpoint_dir",
+        default=str(checkpoint_default) if checkpoint_default is not None else None,
+        help=(
+            "Working directory for HF Trainer checkpoints and logs. Defaults to "
+            "$SM_OUTPUT_DATA_DIR/checkpoints when set, otherwise falls back to --output_dir."
+        ),
+    )
+    p.add_argument(
+        "--serving_code_dir",
+        type=Path,
+        default=default_serving_code_dir(),
+        help=(
+            "Directory whose contents are copied into <output_dir>/code/ so the SageMaker "
+            "Hugging Face DLC finds inference.py in model.tar.gz."
+        ),
+    )
     p.add_argument(
         "--max_length",
         type=int,
@@ -247,7 +283,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="Optional path to Sentences_*.txt; otherwise download PhraseBank next to this file",
     )
-    return p.parse_args(argv)
+    args = p.parse_args(argv)
+    if not args.output_dir:
+        p.error("--output_dir is required (or set SM_MODEL_DIR in the environment)")
+    return args
 
 
 def build_model_and_tokenizer(base_model: str, mlm_checkpoint: str | None):
@@ -338,6 +377,8 @@ def main() -> None:
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir = Path(args.checkpoint_dir) if args.checkpoint_dir else out_dir
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     warmup_steps = trainer_warmup_steps(
         num_train_examples=len(train_tok),
@@ -348,7 +389,7 @@ def main() -> None:
     )
 
     targs = TrainingArguments(
-        output_dir=str(out_dir),
+        output_dir=str(checkpoint_dir),
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.train_batch_size,
         per_device_eval_batch_size=args.eval_batch_size,
@@ -407,7 +448,9 @@ def main() -> None:
 
     trainer.save_model(str(out_dir))
     tokenizer.save_pretrained(str(out_dir))
+    code_dir = copy_serving_code_into(out_dir, args.serving_code_dir)
     print(f"Saved classifier to {out_dir.resolve()}")
+    print(f"Bundled SageMaker serving code at {code_dir.resolve()}")
 
     data_summary = {
         "phrasebank_rows": int(len(df_pb)),
