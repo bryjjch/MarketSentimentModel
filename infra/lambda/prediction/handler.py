@@ -41,6 +41,7 @@ from finsense_shared import (
     aggregate_predictions,
     confidence_from_probabilities,
     curated_key,
+    dt_from_key,
     is_low_confidence,
     prediction_key,
 )
@@ -122,6 +123,10 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
     if not key or not symbol or not run_id:
         return {"error": "missing_payload_fields", "event": event}
 
+    # Derive the partition date from the raw key so all output partitions land
+    # under the same dt= prefix even on retries or cross-day replays.
+    when = dt_from_key(key)
+
     rows: list[dict[str, Any]] = list(read_jsonl(bucket, key))
     if not rows:
         return {"symbol": symbol, "run_id": run_id, "predictions": 0, "detail": "no_rows"}
@@ -186,10 +191,10 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
                 "created_at": now,
             })
 
-    pred_key = prediction_key(symbol, run_id)
+    pred_key = prediction_key(symbol, run_id, when=when)
     write_jsonl(bucket, pred_key, pred_records)
 
-    curated_key_hi = curated_key(symbol, run_id)
+    curated_key_hi = curated_key(symbol, run_id, when=when)
     if curated_hi:
         write_jsonl(bucket, curated_key_hi, curated_hi)
 
@@ -209,6 +214,7 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
             "run_id": run_id,
             "symbol": symbol,
             "bucket": bucket,
+            "dt": when.isoformat() if when else None,
             "predictions_key": pred_key,
             "rows": low_conf_rows,
         })

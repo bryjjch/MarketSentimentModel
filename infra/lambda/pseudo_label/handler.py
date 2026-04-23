@@ -32,9 +32,10 @@ from __future__ import annotations
 import logging
 import os
 import time
+from datetime import date
 from typing import Any
 
-from finsense_shared import curated_key, pseudo_label_key
+from finsense_shared import curated_key, dt_from_key, pseudo_label_key
 from finsense_shared.llm_label import pseudo_label_text
 from finsense_shared.s3io import write_jsonl
 
@@ -92,6 +93,7 @@ def _label_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     """Label the low-confidence rows and write pseudo/ + curated/ partitions."""
+    bucket = event.get("bucket") or DATA_BUCKET
     symbol = str(event.get("symbol") or "").upper()
     run_id = str(event.get("run_id") or "")
     rows = event.get("rows") or []
@@ -100,6 +102,18 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         return {"error": "missing_payload_fields"}
     if not isinstance(rows, list) or not rows:
         return {"symbol": symbol, "run_id": run_id, "labeled": 0, "detail": "no_rows"}
+
+    # Derive the partition date so pseudo/ and curated/ land under the same dt=
+    # partition as the predictions that triggered this invocation.
+    when: date | None = None
+    dt_str = str(event.get("dt") or "")
+    if dt_str:
+        try:
+            when = date.fromisoformat(dt_str)
+        except ValueError:
+            pass
+    if when is None:
+        when = dt_from_key(str(event.get("predictions_key") or ""))
 
     now = int(time.time())
     labeled: list[dict[str, Any]] = []
@@ -131,13 +145,13 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                 "created_at": now,
             })
 
-    pseudo_key = pseudo_label_key(symbol, run_id)
-    write_jsonl(DATA_BUCKET, pseudo_key, labeled)
+    pseudo_key = pseudo_label_key(symbol, run_id, when=when)
+    write_jsonl(bucket, pseudo_key, labeled)
 
     curated_out = ""
     if curated_rows:
-        curated_out = curated_key(symbol, f"{run_id}-pseudo")
-        write_jsonl(DATA_BUCKET, curated_out, curated_rows)
+        curated_out = curated_key(symbol, f"{run_id}-pseudo", when=when)
+        write_jsonl(bucket, curated_out, curated_rows)
 
     n_ok = sum(1 for r in labeled if "pseudo_label_id" in r and r.get("error") is None)
     summary = {

@@ -12,6 +12,7 @@ Glue crawlers) can append new partitions without reprocessing history.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timezone
 
 RAW_PREFIX = "raw"
@@ -60,3 +61,21 @@ def pseudo_label_key(symbol: str, run_id: str, *, when: date | datetime | None =
 def curated_key(symbol: str, run_id: str, *, when: date | datetime | None = None) -> str:
     """Key for curated training rows (combination of high-confidence + pseudo-labeled)."""
     return _key(CURATED_PREFIX, symbol=symbol, run_id=run_id, when=when)
+
+
+_DT_RE = re.compile(r"/dt=(\d{4}-\d{2}-\d{2})/")
+
+
+def dt_from_key(key: str) -> date | None:
+    """Extract the ``dt`` partition date from a Hive-style S3 key.
+
+    Returns a :class:`datetime.date` when the key contains ``/dt=YYYY-MM-DD/``,
+    or ``None`` if the pattern is absent or unparseable.
+    """
+    m = _DT_RE.search(key)
+    if m:
+        try:
+            return date.fromisoformat(m.group(1))
+        except ValueError:
+            pass
+    return None

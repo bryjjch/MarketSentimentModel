@@ -11,6 +11,7 @@ from .confidence import (
 )
 from .partitions import (
     curated_key,
+    dt_from_key,
     partition_prefix,
     prediction_key,
     pseudo_label_key,
@@ -24,6 +25,7 @@ __all__ = [
     "aggregate_predictions",
     "confidence_from_probabilities",
     "curated_key",
+    "dt_from_key",
     "is_low_confidence",
     "load_tickers",
     "normalize_symbol",
