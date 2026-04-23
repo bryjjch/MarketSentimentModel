@@ -1,8 +1,4 @@
 """Shared primitives packaged as a Lambda Layer for Finsense ingestion/prediction/pseudo-label Lambdas.
-
-This package deliberately avoids heavy dependencies (no torch, transformers, openai SDK,
-google-generativeai). Everything network-bound uses ``urllib`` + ``boto3`` (provided by the
-Lambda runtime) so the layer zip stays small and cold starts fast.
 """
 
 from __future__ import annotations
