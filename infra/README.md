@@ -1,28 +1,23 @@
 # Infrastructure (S3, SageMaker, API Gateway)
 
-This folder implements the AWS infrastructure for the Finsense pipeline. Currently, it follows a "backwards-first" path: package a locally trained Hugging Face classifier, upload it to **S3**, deploy a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, and front it with an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
+This folder implements the AWS infrastructure for the Finsense pipeline. Training runs on **SageMaker** and writes a deploy-ready artifact directly (weights + tokenizer + `code/inference.py`) to `SM_MODEL_DIR`, which SageMaker auto-packs into `model.tar.gz` at job end. Terraform wires that tarball into a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, fronted by an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
 
 ## Layout
 
 | Path | Purpose |
 |------|---------|
-| [`sagemaker/serving/code/inference.py`](sagemaker/serving/code/inference.py) | SageMaker `model_fn` / `input_fn` / `predict_fn` / `output_fn`; mirrors train/serve behavior from `training.inference` (max length 175, empty-text handling). |
-| [`scripts/package_model_tarball.py`](scripts/package_model_tarball.py) | Builds `model.tar.gz` (HF weights at tarball root + `code/inference.py`; skips `checkpoint-*` dirs). |
+| [`sagemaker/serving/code/inference.py`](sagemaker/serving/code/inference.py) | SageMaker `model_fn` / `input_fn` / `predict_fn` / `output_fn`; mirrors train/serve behavior from `training.inference` (max length 175, empty-text handling). Copied into `<output_dir>/code/` by the classifier training script so the SageMaker-produced `model.tar.gz` is serving-ready. |
 | [`lambda/predict/handler.py`](lambda/predict/handler.py) | Lambda proxy: forwards JSON body to SageMaker runtime (raw text only). |
 | [`lambda/sentiment/`](lambda/sentiment/) | Orchestration: resolve symbol, collect news (RSS) and optional Reddit posts, batch `invoke_endpoint`, aggregate scores. |
 | [`lambda/cache_read/handler.py`](lambda/cache_read/handler.py) | Reads precomputed per-symbol rows from DynamoDB (`GET /sentiment/cache/{symbol}`). |
 | [`lambda/sentiment_refresh/handler.py`](lambda/sentiment_refresh/handler.py) | Scheduled job: invokes sentiment Lambda per ticker, writes DynamoDB cache. |
 | [`terraform/`](terraform/) | Declarative AWS resources (S3, IAM, SageMaker model/endpoint, Lambda, HTTP API, DynamoDB, EventBridge). |
 
-## 1. Package the model
+## 1. Obtain `model.tar.gz`
 
-From the repository root (with your trained folder, e.g. `outputs/clf_finbert`):
+`finsense-train-classifier` is SageMaker-native: when launched as a training job it writes weights, tokenizer, `training_manifest.json`, and `code/inference.py` to `SM_MODEL_DIR`, and SageMaker automatically uploads the packaged `model.tar.gz` to the job's `OutputDataConfig.S3OutputPath`. Download that object (or point `model_tarball_path` at an `s3://` copy you control) before running `terraform apply`.
 
-```bash
-python infra/scripts/package_model_tarball.py --model_dir outputs/clf_finbert --output model.tar.gz
-```
-
-Use the **final** saved weights under `output_dir` (the script skips `checkpoint-*` directories). The tarball must include `code/inference.py` for the Hugging Face container.
+For local iteration you can still run training on your laptop (`finsense-train-classifier --output_dir outputs/clf_finbert`): the same layout is produced under `outputs/clf_finbert/` and you only need to `tar -czf model.tar.gz -C outputs/clf_finbert .` to hand it to Terraform.
 
 ## 2. SageMaker container image (DLC)
 
@@ -130,7 +125,7 @@ Returns the DynamoDB item as JSON, or `404` if missing. Clients can prefer this 
 
 ## 7. Updating the model
 
-1. Re-run training; package a new `model.tar.gz`.
+1. Launch a new SageMaker training job (or re-run locally and repackage `outputs/<run>/` into a fresh `model.tar.gz`); point `model_tarball_path` at the new artifact.
 2. `terraform apply` (updated `etag` on `aws_s3_object` triggers replacement where needed). SageMaker may require a **new model version** and **endpoint update**; Terraform replaces dependent resources when the object or model resource changes. For advanced blue/green deployments, extend the Terraform or use SageMaker deployment operations separately.
 
 ## 8. Cost notes

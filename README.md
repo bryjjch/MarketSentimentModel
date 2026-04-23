@@ -97,6 +97,8 @@ Unlabeled **JSONL** (field `text` by default) and/or **`.txt`** (one document pe
 finsense-train-mlm --train_files data/wsb.jsonl data/reuters_lines.txt --output_dir outputs/mlm_bert
 ```
 
+Under SageMaker `--train_files` defaults to every `.jsonl`/`.txt` file in the `train` channel (`SM_CHANNEL_TRAIN`), `--output_dir` defaults to `SM_MODEL_DIR`, and HF Trainer checkpoints are kept under `SM_OUTPUT_DATA_DIR/checkpoints` so they are excluded from the packaged `model.tar.gz`.
+
 ### 3. Pseudo-labeling with an LLM (`finsense-pseudo-label`)
 
 Reads JSONL with a text field, appends `label` / `label_name` per row. Requires API keys for cloud providers:
@@ -120,7 +122,7 @@ After each classifier run, metadata is written next to the weights:
 
 ## Artifacts and deployment
 
-Training saves a standard **Transformers** sequence-classification directory under `output_dir`. That layout is suitable for bundling (e.g. `model.tar.gz`) and hosting on **Amazon SageMaker** or any service that loads the same stack, ideally using **`SentimentPredictor`** (or equivalent) so tokenization matches training.
+Training writes a deploy-ready **Transformers** sequence-classification directory (weights, tokenizer, `training_manifest.json`, and `code/inference.py` for SageMaker hosting) under `--output_dir`. Under SageMaker the script defaults `--output_dir` to `SM_MODEL_DIR` and keeps HF Trainer checkpoints under `SM_OUTPUT_DATA_DIR/checkpoints`, so the job's automatic `model.tar.gz` is ready to serve without any post-training packaging step. Locally, point `--output_dir` somewhere convenient and the same layout is produced.
 
 ## Tests
 
