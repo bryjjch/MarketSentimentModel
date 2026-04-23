@@ -78,9 +78,24 @@ def sagemaker_channel_dir(channel: str) -> Path | None:
 
 
 def default_serving_code_dir() -> Path:
-    """Repo-relative path to SageMaker serving ``code/`` (``inference.py`` etc.)."""
+    """
+    Return the default SageMaker serving ``code/`` directory when running from the repository.
+
+    This default relies on the source tree layout (``<repo>/infra/sagemaker/serving/code``).
+    In packaged installs, that directory may not be present, so callers must provide an
+    explicit serving code directory instead of relying on the repo-relative fallback.
+    """
     repo_root = Path(__file__).resolve().parent.parent.parent
-    return repo_root / "infra" / "sagemaker" / "serving" / "code"
+    serving_code_dir = repo_root / "infra" / "sagemaker" / "serving" / "code"
+    if not serving_code_dir.is_dir():
+        raise FileNotFoundError(
+            "Default SageMaker serving code directory was not found at "
+            f"{serving_code_dir}. This default only works when running from the project "
+            "repository with infra/sagemaker/serving/code available. In packaged installs, "
+            "provide an explicit serving code directory instead of relying on "
+            "default_serving_code_dir()."
+        )
+    return serving_code_dir
 
 
 def copy_serving_code_into(target_dir: str | Path, source_dir: str | Path) -> Path:
