@@ -187,11 +187,11 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
             })
 
     pred_key = prediction_key(symbol, run_id)
-    write_jsonl(DATA_BUCKET, pred_key, pred_records)
+    write_jsonl(bucket, pred_key, pred_records)
 
     curated_key_hi = curated_key(symbol, run_id)
     if curated_hi:
-        write_jsonl(DATA_BUCKET, curated_key_hi, curated_hi)
+        write_jsonl(bucket, curated_key_hi, curated_hi)
 
     # Aggregate + cache row for the UI
     agg_score, agg_label, analyzed = aggregate_predictions(
@@ -208,7 +208,7 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
         dispatched = _dispatch_pseudo_label({
             "run_id": run_id,
             "symbol": symbol,
-            "bucket": DATA_BUCKET,
+            "bucket": bucket,
             "predictions_key": pred_key,
             "rows": low_conf_rows,
         })
