@@ -23,7 +23,7 @@ variable "model_key_prefix" {
 
 variable "model_tarball_path" {
   type        = string
-  description = "Local path to model.tar.gz (run ../scripts/package_model_tarball.py first). May be relative to the directory where you run terraform apply."
+  description = "Local path to model.tar.gz produced by a SageMaker training job (auto-packaged from SM_MODEL_DIR). May be relative to the directory where you run terraform apply."
 }
 
 variable "sagemaker_image_uri" {
