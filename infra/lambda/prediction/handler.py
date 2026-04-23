@@ -20,8 +20,9 @@ Outputs:
 
 DynamoDB write: this Lambda also refreshes the per-symbol ``sentiment_cache`` row so the
 existing ``GET /sentiment/cache/{symbol}`` API keeps serving data without any extra
-Lambda. This replaces the old ``sentiment_refresh`` function — the overlap the task
-description called out is real, and keeping two functions in sync was going to drift.
+Lambda. The old scheduled sentiment_refresh Lambda (which did
+``collect -> predict -> PutItem`` once per ticker) has been removed; this function
+does the same work as part of the daily ingestion fan-out.
 """
 
 from __future__ import annotations

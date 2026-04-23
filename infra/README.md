@@ -12,7 +12,6 @@ A second **daily ingestion pipeline** (EventBridge → ingestion Lambda → pred
 | [`lambda/predict/handler.py`](lambda/predict/handler.py) | Lambda proxy: forwards JSON body to SageMaker runtime (raw text only). |
 | [`lambda/sentiment/`](lambda/sentiment/) | Orchestration: resolve symbol, collect news (RSS) and optional Reddit posts, batch `invoke_endpoint`, aggregate scores. |
 | [`lambda/cache_read/handler.py`](lambda/cache_read/handler.py) | Reads precomputed per-symbol rows from DynamoDB (`GET /sentiment/cache/{symbol}`). |
-| [`lambda/sentiment_refresh/handler.py`](lambda/sentiment_refresh/handler.py) | **Legacy** scheduled job: invokes sentiment Lambda per ticker, writes DynamoDB cache. Disabled by default; superseded by the ingestion pipeline below (set `disable_legacy_sentiment_refresh = false` to resurrect). |
 | [`lambda/ingestion/handler.py`](lambda/ingestion/handler.py) | **Daily ingestion** Lambda: EventBridge fan-out that collects raw news/social text per ticker and writes it to `raw/` in the data bucket, then async-invokes the prediction Lambda per symbol. |
 | [`lambda/prediction/handler.py`](lambda/prediction/handler.py) | Reads one `raw/` partition, runs SageMaker in batches, writes per-text rows to `predictions/`, writes high-confidence rows to `curated/`, fans low-confidence rows out to the pseudo-label Lambda, and refreshes the DynamoDB `sentiment_cache` row used by the existing read API. |
 | [`lambda/pseudo_label/handler.py`](lambda/pseudo_label/handler.py) | Provider-agnostic LLM labeler (`openai`, `google`, or offline `echo`). Writes `pseudo/` rows and merges newly-labeled rows into `curated/` with `source=pseudo`. |
@@ -69,7 +68,7 @@ terraform apply
 - **Model**: `PrimaryContainer` with your `sagemaker_image_uri` and `model_data_url` pointing at `s3://.../models/finsense/v1/model.tar.gz` (prefix configurable via `model_key_prefix`).
 - **Endpoint**: one production variant using `serverless_config`; tune memory and concurrency with `sagemaker_serverless_memory_size_in_mb` and `sagemaker_serverless_max_concurrency`.
 
-After deploy, outputs include `sagemaker_endpoint_name`, `predict_url`, `sentiment_by_symbol_url`, `sentiment_cache_read_url_template`, `sentiment_cache_table_name`, `sentiment_refresh_rule_name` (empty when the legacy refresh is disabled), `data_bucket_name`, `ingestion_function_name`, `prediction_function_name`, `pseudo_label_function_name`, and `ingestion_rule_name`.
+After deploy, outputs include `sagemaker_endpoint_name`, `predict_url`, `sentiment_by_symbol_url`, `sentiment_cache_read_url_template`, `sentiment_cache_table_name`, `data_bucket_name`, `ingestion_function_name`, `prediction_function_name`, `pseudo_label_function_name`, and `ingestion_rule_name`.
 
 ## 6. API Gateway + Lambda
 
@@ -110,13 +109,14 @@ curl -sS -X POST "$(terraform output -raw sentiment_by_symbol_url)" \
 
 **API Gateway timeout:** HTTP API integrations are limited to about **30 seconds**. Keep `max_articles` modest so RSS fetch + SageMaker stay within that window; if you need heavier scraping, move work to an async pattern (e.g. SQS + worker) or raise caps only in offline jobs.
 
-### DynamoDB cache and scheduled refresh
+### DynamoDB cache
 
 Terraform provisions:
 
-- Table **`{project_name}-sentiment-cache`**: partition key `symbol` (string); attributes written by the refresher include `score`, `label`, `article_count`, `recent_headlines`, `updated_at`, `expires_at`. **TTL** is enabled on `expires_at` (refresh time + `sentiment_cache_ttl_seconds`, default 7 days).
-- **SSM** parameter `/{project_name}/top-tickers`: JSON array of tickers for the refresher (editable in AWS Console or via Terraform `top_tickers_json`).
-- **EventBridge** rule (`sentiment_refresh_schedule`, default `rate(1 hour)`) invoking **`{project_name}-sentiment-refresh`**, which **invokes the sentiment Lambda directly** (same logic as the HTTP route) once per ticker and `PutItem`s into DynamoDB.
+- Table **`{project_name}-sentiment-cache`**: partition key `symbol` (string); attributes include `score`, `label`, `article_count`, `recent_headlines`, `updated_at`, `expires_at`. **TTL** is enabled on `expires_at` (write time + `sentiment_cache_ttl_seconds`, default 7 days).
+- **SSM** parameter `/{project_name}/top-tickers`: JSON array of tickers consumed by the daily ingestion Lambda (editable in AWS Console or via Terraform `top_tickers_json`).
+
+The cache row is written by the **prediction Lambda** as part of the daily ingestion fan-out (see [§7](#7-daily-ingestion--provider-agnostic-pseudo-labeling)) — the older dedicated `sentiment_refresh` Lambda has been removed since its work is now a side-effect of the predict path.
 
 ### Read cached snapshot (`GET /sentiment/cache/{symbol}`)
 
@@ -197,10 +197,12 @@ The original `sentiment_refresh` Lambda did `collect → predict → cache-write
 ticker and the `POST /sentiment/by-symbol` Lambda did the same thing on demand for API
 Gateway traffic. The daily ingestion pipeline supersedes the scheduled refresh: the
 prediction Lambda writes the same DynamoDB `sentiment_cache` rows the UI already reads
-via `GET /sentiment/cache/{symbol}`, so no consumer changes are required. The
-`sentiment_refresh` Lambda and its EventBridge rule are disabled by default
-(`var.disable_legacy_sentiment_refresh = true`); the on-demand
-`POST /sentiment/by-symbol` Lambda stays because it serves interactive traffic.
+via `GET /sentiment/cache/{symbol}`, so no consumer changes are required.
+
+The `sentiment_refresh` Lambda, its IAM role, and its EventBridge rule have been
+**removed** from this stack. The on-demand `POST /sentiment/by-symbol` Lambda stays
+because it serves interactive traffic with a different access pattern. Existing
+deployments will see `terraform apply` destroy the legacy resources cleanly.
 
 ### Manual replay / single-symbol run
 

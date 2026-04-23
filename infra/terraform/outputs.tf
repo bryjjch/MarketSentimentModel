@@ -47,11 +47,6 @@ output "sentiment_cache_table_name" {
   value       = aws_dynamodb_table.sentiment_cache.name
 }
 
-output "sentiment_refresh_rule_name" {
-  description = "EventBridge rule name for the legacy scheduled cache refresh (empty when disabled)."
-  value       = try(aws_cloudwatch_event_rule.sentiment_refresh[0].name, "")
-}
-
 output "data_bucket_name" {
   description = "S3 bucket for raw/predictions/pseudo/curated pipeline data (separate from the model bucket)."
   value       = aws_s3_bucket.data.bucket

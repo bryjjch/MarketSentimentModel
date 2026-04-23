@@ -91,15 +91,9 @@ variable "sentiment_cache_ttl_seconds" {
   default     = 604800
 }
 
-variable "sentiment_refresh_schedule" {
-  type        = string
-  description = "EventBridge rate or cron for cache refresh (e.g. rate(1 hour))."
-  default     = "rate(1 hour)"
-}
-
 variable "top_tickers_json" {
   type        = string
-  description = "JSON array of tickers stored in SSM at /{project_name}/top-tickers for the refresher."
+  description = "JSON array of tickers stored in SSM at /{project_name}/top-tickers for the ingestion Lambda."
   default     = "[\"AAPL\",\"MSFT\",\"GOOGL\"]"
 }
 
@@ -197,10 +191,4 @@ variable "pseudo_label_lambda_memory_mb" {
   type        = number
   description = "Memory (MB) for the pseudo-label Lambda."
   default     = 512
-}
-
-variable "disable_legacy_sentiment_refresh" {
-  type        = bool
-  description = "If true, the legacy sentiment_refresh Lambda + EventBridge rule are not created (the new ingestion pipeline replaces them)."
-  default     = true
 }
