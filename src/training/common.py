@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -53,6 +54,66 @@ def default_data_root() -> Path:
     """Default directory for downloaded corpora: ``<repository root>/data``."""
     repo_root = Path(__file__).resolve().parent.parent.parent
     return repo_root / "data"
+
+
+def _env_path(var_name: str) -> Path | None:
+    """Return ``Path`` from a whitespace-trimmed environment variable, or ``None`` if unset/empty."""
+    value = os.environ.get(var_name, "").strip()
+    return Path(value) if value else None
+
+
+def sagemaker_model_dir() -> Path | None:
+    """Return ``SM_MODEL_DIR`` (auto-packaged into ``model.tar.gz`` at training job end) if set."""
+    return _env_path("SM_MODEL_DIR")
+
+
+def sagemaker_output_data_dir() -> Path | None:
+    """Return ``SM_OUTPUT_DATA_DIR`` (uploaded to the job's output S3 path as ``output.tar.gz``) if set."""
+    return _env_path("SM_OUTPUT_DATA_DIR")
+
+
+def sagemaker_channel_dir(channel: str) -> Path | None:
+    """Return ``SM_CHANNEL_<CHANNEL>`` directory (staged from S3 by SageMaker) if set."""
+    return _env_path(f"SM_CHANNEL_{channel.upper()}")
+
+
+def default_serving_code_dir() -> Path:
+    """
+    Return the default SageMaker serving ``code/`` directory when running from the repository.
+
+    This default relies on the source tree layout (``<repo>/infra/sagemaker/serving/code``).
+    In packaged installs, that directory may not be present, so callers must provide an
+    explicit serving code directory instead of relying on the repo-relative fallback.
+    """
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    serving_code_dir = repo_root / "infra" / "sagemaker" / "serving" / "code"
+    if not serving_code_dir.is_dir():
+        raise FileNotFoundError(
+            "Default SageMaker serving code directory was not found at "
+            f"{serving_code_dir}. This default only works when running from the project "
+            "repository with infra/sagemaker/serving/code available. In packaged installs, "
+            "provide an explicit serving code directory instead of relying on "
+            "default_serving_code_dir()."
+        )
+    return serving_code_dir
+
+
+def copy_serving_code_into(target_dir: str | Path, source_dir: str | Path) -> Path:
+    """
+    Copy SageMaker serving code into ``<target_dir>/code/`` so the auto-packaged
+    ``model.tar.gz`` contains the inference entrypoint expected by the Hugging Face DLC.
+
+    Any existing ``code/`` subtree under ``target_dir`` is replaced. ``__pycache__`` and
+    ``*.pyc`` files are excluded.
+    """
+    src = Path(source_dir).resolve()
+    if not src.is_dir():
+        raise FileNotFoundError(f"Serving code directory not found: {src}")
+    dst = Path(target_dir) / "code"
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    return dst
 
 
 def ensure_finphrasebank(
