@@ -36,3 +36,24 @@ resource "aws_sagemaker_endpoint" "classifier" {
     aws_sagemaker_endpoint_configuration.classifier,
   ]
 }
+
+# ---------------------------------------------------------------------------
+# Training pipeline
+# ---------------------------------------------------------------------------
+
+resource "aws_sagemaker_model_package_group" "sentiment" {
+  model_package_group_name = var.model_package_group_name
+}
+
+resource "aws_sagemaker_pipeline" "training" {
+  pipeline_name         = local.pipeline_name
+  pipeline_display_name = "${var.project_name} Sentiment Training Pipeline"
+  role_arn              = aws_iam_role.sagemaker_pipeline.arn
+
+  pipeline_definition = var.pipeline_definition_json != "" ? var.pipeline_definition_json : file(var.pipeline_definition_path)
+
+  depends_on = [
+    aws_iam_role_policy.sagemaker_pipeline_inline,
+    aws_sagemaker_model_package_group.sentiment,
+  ]
+}
