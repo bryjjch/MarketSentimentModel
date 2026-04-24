@@ -47,7 +47,27 @@ output "sentiment_cache_table_name" {
   value       = aws_dynamodb_table.sentiment_cache.name
 }
 
-output "sentiment_refresh_rule_name" {
-  description = "EventBridge rule name for scheduled cache refresh"
-  value       = aws_cloudwatch_event_rule.sentiment_refresh.name
+output "data_bucket_name" {
+  description = "S3 bucket for raw/predictions/pseudo/curated pipeline data (separate from the model bucket)."
+  value       = aws_s3_bucket.data.bucket
+}
+
+output "ingestion_function_name" {
+  description = "Daily ingestion Lambda (EventBridge cron target)."
+  value       = aws_lambda_function.ingestion.function_name
+}
+
+output "prediction_function_name" {
+  description = "Prediction Lambda invoked per-ticker by the ingestion fan-out."
+  value       = aws_lambda_function.prediction.function_name
+}
+
+output "pseudo_label_function_name" {
+  description = "Pseudo-label Lambda invoked by the prediction Lambda for low-confidence rows."
+  value       = aws_lambda_function.pseudo_label.function_name
+}
+
+output "ingestion_rule_name" {
+  description = "EventBridge rule name for the daily ingestion fan-out."
+  value       = aws_cloudwatch_event_rule.ingestion.name
 }

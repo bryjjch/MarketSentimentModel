@@ -2,6 +2,8 @@
 
 This folder implements the AWS infrastructure for the Finsense pipeline. Training runs on **SageMaker** and writes a deploy-ready artifact directly (weights + tokenizer + `code/inference.py`) to `SM_MODEL_DIR`, which SageMaker auto-packs into `model.tar.gz` at job end. Terraform wires that tarball into a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, fronted by an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
 
+A second **daily ingestion pipeline** (EventBridge → ingestion Lambda → prediction Lambda → pseudo-label Lambda) writes raw news/social text, model predictions, low-confidence pseudo-labels, and curated training rows to a **separate data bucket** partitioned by `dt=YYYY-MM-DD/symbol=SYM/…`. See [§7](#7-daily-ingestion--provider-agnostic-pseudo-labeling).
+
 ## Layout
 
 | Path | Purpose |
@@ -10,7 +12,10 @@ This folder implements the AWS infrastructure for the Finsense pipeline. Trainin
 | [`lambda/predict/handler.py`](lambda/predict/handler.py) | Lambda proxy: forwards JSON body to SageMaker runtime (raw text only). |
 | [`lambda/sentiment/`](lambda/sentiment/) | Orchestration: resolve symbol, collect news (RSS) and optional Reddit posts, batch `invoke_endpoint`, aggregate scores. |
 | [`lambda/cache_read/handler.py`](lambda/cache_read/handler.py) | Reads precomputed per-symbol rows from DynamoDB (`GET /sentiment/cache/{symbol}`). |
-| [`lambda/sentiment_refresh/handler.py`](lambda/sentiment_refresh/handler.py) | Scheduled job: invokes sentiment Lambda per ticker, writes DynamoDB cache. |
+| [`lambda/ingestion/handler.py`](lambda/ingestion/handler.py) | **Daily ingestion** Lambda: EventBridge fan-out that collects raw news/social text per ticker and writes it to `raw/` in the data bucket, then async-invokes the prediction Lambda per symbol. |
+| [`lambda/prediction/handler.py`](lambda/prediction/handler.py) | Reads one `raw/` partition, runs SageMaker in batches, writes per-text rows to `predictions/`, writes high-confidence rows to `curated/`, fans low-confidence rows out to the pseudo-label Lambda, and refreshes the DynamoDB `sentiment_cache` row used by the existing read API. |
+| [`lambda/pseudo_label/handler.py`](lambda/pseudo_label/handler.py) | Provider-agnostic LLM labeler (`openai`, `google`, or offline `echo`). Writes `pseudo/` rows and merges newly-labeled rows into `curated/` with `source=pseudo`. |
+| [`lambda/_layer/python/finsense_shared/`](lambda/_layer/python/finsense_shared/) | Shared Lambda Layer: source adapters, S3 I/O, SageMaker batch invoker, confidence math, Hive-style key helpers, and the urllib-based provider-agnostic LLM client. |
 | [`terraform/`](terraform/) | Declarative AWS resources (S3, IAM, SageMaker model/endpoint, Lambda, HTTP API, DynamoDB, EventBridge). |
 
 ## 1. Obtain `model.tar.gz`
@@ -27,7 +32,7 @@ Set `sagemaker_image_uri` in `terraform.tfvars` (see [`terraform/terraform.tfvar
 
 ## 3. S3 bucket behavior (Terraform)
 
-The stack creates (or uses) a private model bucket with:
+The stack creates **two** private buckets. Both share the same security baseline:
 
 - **Block Public Access** on all four settings.
 - **Bucket owner enforced** object ownership.
@@ -35,9 +40,12 @@ The stack creates (or uses) a private model bucket with:
 - **Versioning** enabled (easy rollback when overwriting the same key).
 - **Bucket policy** denying requests where `aws:SecureTransport` is false (TLS-only).
 
-The SageMaker execution role is granted **`s3:GetObject` / `s3:ListBucket`** on that bucket (and **`logs:*`** under `/aws/sagemaker/*`, plus **ECR read** for pulling the DLC).
+1. **Models bucket** (`${project_name}-models-${account_id}` unless `bucket_name` overrides) holds the serving `model.tar.gz`. The SageMaker execution role is granted **`s3:GetObject` / `s3:ListBucket`** on that bucket (and **`logs:*`** under `/aws/sagemaker/*`, plus **ECR read** for pulling the DLC).
+2. **Data bucket** (`${project_name}-data-${account_id}` unless `data_bucket_name` overrides) holds the daily ingestion pipeline output (`raw/`, `predictions/`, `pseudo/`, `curated/`). Lifecycle rules expire `raw/` and `predictions/` partitions after `var.data_retention_days` days (default 90); `pseudo/` and `curated/` are retained indefinitely because they double as training data.
 
-For development destroys, you may set `s3_force_destroy = true` in `terraform.tfvars` so `terraform destroy` can empty the bucket (use with care).
+Ingestion / prediction / pseudo-label Lambdas each get **prefix-scoped** S3 permissions (e.g. the ingestion Lambda can only write to `raw/*`, the prediction Lambda can only write to `predictions/*` and `curated/*`). See §7.
+
+For development destroys, you may set `s3_force_destroy = true` in `terraform.tfvars` so `terraform destroy` can empty both buckets (use with care).
 
 ## 4. Deploy with Terraform
 
@@ -52,7 +60,7 @@ terraform apply
 
 `model_tarball_path` is resolved with `abspath()` relative to your current working directory when you run `apply`; paths like `../../model.tar.gz` from `infra/terraform` work if `model.tar.gz` lives at the repo root.
 
-**Order of creation:** S3 upload (`aws_s3_object`) → SageMaker model → endpoint configuration → endpoint → Lambda IAM + functions → API routes → DynamoDB / SSM / scheduled refresh. The first `apply` can take **15–25+ minutes** while the endpoint becomes `InService`.
+**Order of creation:** S3 upload (`aws_s3_object`) → SageMaker model → endpoint configuration → endpoint → Lambda IAM + functions (predict, sentiment, cache_read, pseudo_label, prediction, ingestion) → Lambda Layer (`finsense_shared`) → API routes → DynamoDB / SSM → EventBridge ingestion schedule. The first `apply` can take **15–25+ minutes** while the endpoint becomes `InService`.
 
 ## 5. SageMaker endpoint (Terraform)
 
@@ -60,7 +68,7 @@ terraform apply
 - **Model**: `PrimaryContainer` with your `sagemaker_image_uri` and `model_data_url` pointing at `s3://.../models/finsense/v1/model.tar.gz` (prefix configurable via `model_key_prefix`).
 - **Endpoint**: one production variant using `serverless_config`; tune memory and concurrency with `sagemaker_serverless_memory_size_in_mb` and `sagemaker_serverless_max_concurrency`.
 
-After deploy, outputs include `sagemaker_endpoint_name`, `predict_url`, `sentiment_by_symbol_url`, `sentiment_cache_read_url_template`, `sentiment_cache_table_name`, and `sentiment_refresh_rule_name`.
+After deploy, outputs include `sagemaker_endpoint_name`, `predict_url`, `sentiment_by_symbol_url`, `sentiment_cache_read_url_template`, `sentiment_cache_table_name`, `data_bucket_name`, `ingestion_function_name`, `prediction_function_name`, `pseudo_label_function_name`, and `ingestion_rule_name`.
 
 ## 6. API Gateway + Lambda
 
@@ -101,13 +109,14 @@ curl -sS -X POST "$(terraform output -raw sentiment_by_symbol_url)" \
 
 **API Gateway timeout:** HTTP API integrations are limited to about **30 seconds**. Keep `max_articles` modest so RSS fetch + SageMaker stay within that window; if you need heavier scraping, move work to an async pattern (e.g. SQS + worker) or raise caps only in offline jobs.
 
-### DynamoDB cache and scheduled refresh
+### DynamoDB cache
 
 Terraform provisions:
 
-- Table **`{project_name}-sentiment-cache`**: partition key `symbol` (string); attributes written by the refresher include `score`, `label`, `article_count`, `recent_headlines`, `updated_at`, `expires_at`. **TTL** is enabled on `expires_at` (refresh time + `sentiment_cache_ttl_seconds`, default 7 days).
-- **SSM** parameter `/{project_name}/top-tickers`: JSON array of tickers for the refresher (editable in AWS Console or via Terraform `top_tickers_json`).
-- **EventBridge** rule (`sentiment_refresh_schedule`, default `rate(1 hour)`) invoking **`{project_name}-sentiment-refresh`**, which **invokes the sentiment Lambda directly** (same logic as the HTTP route) once per ticker and `PutItem`s into DynamoDB.
+- Table **`{project_name}-sentiment-cache`**: partition key `symbol` (string); attributes include `score`, `label`, `article_count`, `recent_headlines`, `updated_at`, `expires_at`. **TTL** is enabled on `expires_at` (write time + `sentiment_cache_ttl_seconds`, default 7 days).
+- **SSM** parameter `/{project_name}/top-tickers`: JSON array of tickers consumed by the daily ingestion Lambda (editable in AWS Console or via Terraform `top_tickers_json`).
+
+The cache row is written by the **prediction Lambda** as part of the daily ingestion fan-out (see [§7](#7-daily-ingestion--provider-agnostic-pseudo-labeling)) — the older dedicated `sentiment_refresh` Lambda has been removed since its work is now a side-effect of the predict path.
 
 ### Read cached snapshot (`GET /sentiment/cache/{symbol}`)
 
@@ -123,11 +132,90 @@ Returns the DynamoDB item as JSON, or `404` if missing. Clients can prefer this 
 - **Lambda authorizer** for API keys or custom tokens.
 - **Do not** leave anonymous public access on production; pair throttling and WAF as needed.
 
-## 7. Updating the model
+## 7. Daily ingestion & provider-agnostic pseudo-labeling
+
+A second, independent pipeline feeds the training corpus by running every day at
+`var.ingestion_schedule` (default `cron(0 13 * * ? *)` = 13:00 UTC). It stores everything
+in a **separate S3 bucket** (`var.data_bucket_name`, defaults to
+`${project_name}-data-${account_id}`) so the model artifact bucket stays single-purpose.
+
+### Data layout
+
+The pipeline writes Hive-partitioned JSON Lines:
+
+```
+s3://<data-bucket>/
+  raw/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl         # titles/URLs/snippets from RSS+Reddit
+  predictions/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl # rows + probabilities + confidence
+  pseudo/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl      # LLM labels for low-confidence rows
+  curated/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl         # high-conf model labels (source=model)
+  curated/dt=YYYY-MM-DD/symbol=AAPL/<run_id>-pseudo.jsonl  # LLM labels (source=pseudo)
+```
+
+Athena / Glue / SageMaker Processing can register the bucket as a single table and
+filter by `dt` / `symbol` / `source` (model vs pseudo) without reshuffling data.
+
+### Flow
+
+```
+EventBridge (daily)
+    └── ingestion Lambda
+         ├── writes raw/dt=.../symbol=.../
+         └── async-invoke (per symbol) ──► prediction Lambda
+                                                ├── InvokeEndpoint (SageMaker)
+                                                ├── writes predictions/…
+                                                ├── writes curated/… (high-conf)
+                                                ├── PutItem sentiment_cache (DynamoDB)
+                                                └── async-invoke ──► pseudo-label Lambda
+                                                                          ├── calls OpenAI / Gemini
+                                                                          ├── writes pseudo/…
+                                                                          └── writes curated/…-pseudo
+```
+
+### Confidence gating
+
+A prediction is treated as **low-confidence** and routed to the pseudo-label Lambda when
+the model's top-class probability is below `var.low_conf_top_prob` (default `0.65`), or
+optionally when the margin between the top two classes is below `var.low_conf_margin`
+(default `0.0`, disabled). Tune both in `terraform.tfvars` without touching code.
+
+### Pseudo-labeler provider selection
+
+`var.llm_provider` selects the backend:
+
+- `openai` (default): Chat Completions, model `var.llm_model` (default `gpt-4o-mini`).
+- `google`: Gemini via Google AI Studio; default model `gemini-2.0-flash`.
+- `echo`: deterministic offline stub (plumbing tests only, not real labels).
+
+API keys are sourced from Secrets Manager when `var.openai_secret_arn` /
+`var.google_secret_arn` are set (JSON shape `{"api_key":"..."}`), otherwise from the
+runtime env vars `OPENAI_API_KEY` / `GOOGLE_API_KEY` / `GEMINI_API_KEY`.
+
+### On-demand vs scheduled overlap
+
+The original `sentiment_refresh` Lambda did `collect → predict → cache-write` per
+ticker and the `POST /sentiment/by-symbol` Lambda did the same thing on demand for API
+Gateway traffic. The daily ingestion pipeline supersedes the scheduled refresh: the
+prediction Lambda writes the same DynamoDB `sentiment_cache` rows the UI already reads
+via `GET /sentiment/cache/{symbol}`, so no consumer changes are required.
+
+The `sentiment_refresh` Lambda, its IAM role, and its EventBridge rule have been
+**removed** from this stack. The on-demand `POST /sentiment/by-symbol` Lambda stays
+because it serves interactive traffic with a different access pattern. Existing
+deployments will see `terraform apply` destroy the legacy resources cleanly.
+
+### Manual replay / single-symbol run
+
+```bash
+aws lambda invoke --function-name "$(terraform output -raw ingestion_function_name)" \
+  --payload '{"symbol":"AAPL","options":{"max_articles":10}}' /tmp/ingest.json
+```
+
+## 8. Updating the model
 
 1. Launch a new SageMaker training job (or re-run locally and repackage `outputs/<run>/` into a fresh `model.tar.gz`); point `model_tarball_path` at the new artifact.
 2. `terraform apply` (updated `etag` on `aws_s3_object` triggers replacement where needed). SageMaker may require a **new model version** and **endpoint update**; Terraform replaces dependent resources when the object or model resource changes. For advanced blue/green deployments, extend the Terraform or use SageMaker deployment operations separately.
 
-## 8. Cost notes
+## 9. Cost notes
 
 The largest ongoing cost is SageMaker inference usage. Serverless avoids paying for idle provisioned instances, but you should still delete the stack when not needed (`terraform destroy`; ensure `s3_force_destroy` if you need the bucket emptied).

@@ -24,5 +24,18 @@ sagemaker_serverless_max_concurrency   = 10
 # Sentiment orchestration + DynamoDB cache (optional):
 # reddit_credentials_secret_arn = "arn:aws:secretsmanager:region:account:secret:name"
 # sentiment_cache_ttl_seconds     = 604800
-# sentiment_refresh_schedule      = "rate(1 hour)"
 # top_tickers_json                = "[\"AAPL\",\"MSFT\",\"GOOGL\"]"
+#
+# Daily ingestion + pseudo-labeling pipeline (optional):
+# data_bucket_name              = "my-globally-unique-data-bucket"
+# data_retention_days           = 90
+# ingestion_schedule            = "cron(0 13 * * ? *)"
+# ingestion_max_articles        = 20
+# ingestion_include_social      = true
+# sagemaker_batch_size          = 32
+# low_conf_top_prob             = 0.65
+# low_conf_margin               = 0.0
+# llm_provider                  = "openai"   # openai | google | echo
+# llm_model                     = ""          # empty = provider default
+# openai_secret_arn             = "arn:aws:secretsmanager:region:account:secret:finsense/openai"
+# google_secret_arn             = "arn:aws:secretsmanager:region:account:secret:finsense/google"
