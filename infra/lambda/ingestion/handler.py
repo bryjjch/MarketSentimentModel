@@ -40,6 +40,20 @@ INCLUDE_SOCIAL = os.environ.get("INCLUDE_SOCIAL", "true").lower() not in ("0", "
 _lambda = boto3.client("lambda")
 
 
+def _parse_bool(value: Any, default: bool) -> bool:
+    """Return a bool from *value*, applying the same rules as the env-var parsing above.
+
+    Accepts actual JSON booleans unchanged.  String values are treated case-insensitively:
+    ``"0"``, ``"false"``, and ``"no"`` are falsy; everything else is truthy.
+    Falls back to *default* when *value* is ``None``.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() not in ("0", "false", "no")
+
+
 def _now_ts() -> int:
     return int(time.time())
 
@@ -110,7 +124,7 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     opts = event.get("options") if isinstance(event, dict) and isinstance(event.get("options"), dict) else {}
     max_articles = int(opts.get("max_articles", DEFAULT_MAX_ARTICLES))
     max_articles = max(1, min(max_articles, 40))
-    include_social = bool(opts.get("include_social", INCLUDE_SOCIAL))
+    include_social = _parse_bool(opts.get("include_social"), INCLUDE_SOCIAL)
     run_id = str(event.get("run_id") or "") if isinstance(event, dict) else ""
     run_id = run_id or f"{_dt_date()}-{uuid.uuid4().hex[:8]}"
 
