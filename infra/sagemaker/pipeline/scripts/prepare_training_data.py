@@ -88,7 +88,7 @@ def _load_curated_jsonl(curated_dir: Path) -> pd.DataFrame:
 
 
 def _write_phrasebank_format(df: pd.DataFrame, dest: Path) -> None:
-    """Write a DataFrame back in PhraseBank's ``text@sentiment`` tab-separated format."""
+    """Write a DataFrame in PhraseBank's ``text@sentiment`` ``@``-delimited format."""
     id_to_str = {0: "negative", 1: "neutral", 2: "positive"}
     dest.parent.mkdir(parents=True, exist_ok=True)
     with dest.open("w", encoding="ISO-8859-1") as f:
