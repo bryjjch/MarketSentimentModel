@@ -26,6 +26,16 @@ from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_su
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 
+def _safe_extractall(tar: tarfile.TarFile, extract_to: Path) -> None:
+    """Extract all tar members, rejecting any paths that escape *extract_to*."""
+    abs_dest = extract_to.resolve()
+    for member in tar.getmembers():
+        member_path = (abs_dest / member.name).resolve()
+        if not str(member_path).startswith(str(abs_dest) + os.sep) and member_path != abs_dest:
+            raise ValueError(f"Refusing unsafe tar member path: {member.name!r}")
+    tar.extractall(extract_to)
+
+
 def _extract_model(model_dir: Path) -> Path:
     """If model_dir contains a tar.gz instead of extracted weights, extract it first."""
     tar_files = list(model_dir.glob("*.tar.gz"))
@@ -34,7 +44,7 @@ def _extract_model(model_dir: Path) -> Path:
         extract_to.mkdir(exist_ok=True)
         for tf in tar_files:
             with tarfile.open(tf, "r:gz") as tar:
-                tar.extractall(extract_to)
+                _safe_extractall(tar, extract_to)
         return extract_to
 
     if (model_dir / "config.json").exists():
