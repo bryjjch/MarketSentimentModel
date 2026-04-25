@@ -91,7 +91,7 @@ def build_pipeline(
     param_inference_image = ParameterString(
         name="InferenceImageUri",
         default_value="763104351884.dkr.ecr.us-east-1.amazonaws.com/"
-        "huggingface-pytorch-inference:2.6.0-transformers4.51.3-cpu-py312-ubuntu22.04-",
+        "huggingface-pytorch-inference:2.6.0-transformers4.51.3-cpu-py312-ubuntu22.04",
     )
     param_processing_instance = ParameterString(
         name="ProcessingInstanceType",
