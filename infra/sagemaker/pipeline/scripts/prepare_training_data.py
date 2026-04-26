@@ -20,11 +20,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import urllib.request
 import zipfile
 from pathlib import Path
 
 import pandas as pd
-import wget
 from sklearn.model_selection import train_test_split
 
 SENTIMENT_STR_TO_ID = {"negative": 0, "neutral": 1, "positive": 2}
@@ -41,7 +41,7 @@ def _download_phrasebank(dest_dir: Path, subset: str = "Sentences_75Agree.txt") 
     extract_dir = dest_dir / "FinancialPhraseBank-v1.0"
     if not zip_path.is_file():
         print("Downloading Financial PhraseBank ...")
-        wget.download(str(FINPHRASE_ZIP_URL), str(zip_path))
+        urllib.request.urlretrieve(FINPHRASE_ZIP_URL, str(zip_path))
         print()
     if not extract_dir.is_dir():
         with zipfile.ZipFile(zip_path, "r") as zf:
