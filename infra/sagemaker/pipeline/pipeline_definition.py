@@ -25,7 +25,7 @@ from sagemaker.processing import ProcessingInput, ProcessingOutput, ScriptProces
 from sagemaker.sklearn.processing import SKLearnProcessor
 from sagemaker.workflow.condition_step import ConditionStep
 from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
-from sagemaker.workflow.functions import JsonGet
+from sagemaker.workflow.functions import Join, JsonGet
 from sagemaker.workflow.parameters import ParameterFloat, ParameterInteger, ParameterString
 from sagemaker.workflow.pipeline import Pipeline
 from sagemaker.workflow.properties import PropertyFile
@@ -114,7 +114,10 @@ def build_pipeline(
     param_test_ratio = ParameterFloat(name="TestRatio", default_value=0.10)
     param_seed = ParameterInteger(name="Seed", default_value=42)
 
-    pipeline_s3_root = f"s3://{bucket}/{pipeline_name}"
+    # Build S3 URIs from the DataBucket pipeline parameter so that executions
+    # can redirect artifacts at run time by setting DataBucket.
+    def _s3(suffix: str) -> Join:
+        return Join(on="/", values=["s3:/", param_data_bucket, pipeline_name, suffix])
 
     # ------------------------------------------------------------------
     # Step 1 – Data preparation (Processing)
@@ -131,7 +134,9 @@ def build_pipeline(
         code=_resolve(_SCRIPTS_DIR / "prepare_training_data.py"),
         inputs=[
             ProcessingInput(
-                source=f"s3://{param_curated_prefix}",
+                # CuratedS3Prefix is a user-supplied prefix within DataBucket, not under
+                # the pipeline root, so we construct the URI directly rather than via _s3().
+                source=Join(on="", values=["s3://", param_data_bucket, "/", param_curated_prefix]),
                 input_name="curated",
                 destination="/opt/ml/processing/input/curated",
                 s3_data_distribution_type="FullyReplicated",
@@ -139,13 +144,13 @@ def build_pipeline(
         ],
         outputs=[
             ProcessingOutput(output_name="mlm_corpus", source="/opt/ml/processing/output/mlm_corpus",
-                             destination=f"{pipeline_s3_root}/data_prep/mlm_corpus"),
+                             destination=_s3("data_prep/mlm_corpus")),
             ProcessingOutput(output_name="phrasebank_train", source="/opt/ml/processing/output/phrasebank_train",
-                             destination=f"{pipeline_s3_root}/data_prep/phrasebank_train"),
+                             destination=_s3("data_prep/phrasebank_train")),
             ProcessingOutput(output_name="pseudo_data", source="/opt/ml/processing/output/pseudo_data",
-                             destination=f"{pipeline_s3_root}/data_prep/pseudo_data"),
+                             destination=_s3("data_prep/pseudo_data")),
             ProcessingOutput(output_name="test_data", source="/opt/ml/processing/output/test_data",
-                             destination=f"{pipeline_s3_root}/data_prep/test_data"),
+                             destination=_s3("data_prep/test_data")),
         ],
         arguments=[
             "--test-ratio", param_test_ratio.to_string(),
@@ -172,7 +177,7 @@ def build_pipeline(
             "model_name": param_base_model,
             "fp16": "True",
         },
-        output_path=f"{pipeline_s3_root}/mlm",
+        output_path=_s3("mlm"),
     )
 
     mlm_train_args = mlm_estimator.fit(
@@ -210,7 +215,7 @@ def build_pipeline(
             "pseudo_data": "/opt/ml/input/data/pseudo/pseudo.jsonl",
             "mlm_checkpoint": "/opt/ml/input/data/mlm_checkpoint",
         },
-        output_path=f"{pipeline_s3_root}/classifier",
+        output_path=_s3("classifier"),
     )
 
     clf_train_args = clf_estimator.fit(
@@ -271,7 +276,7 @@ def build_pipeline(
             ProcessingOutput(
                 output_name="evaluation",
                 source="/opt/ml/processing/output/evaluation",
-                destination=f"{pipeline_s3_root}/evaluation",
+                destination=_s3("evaluation"),
             ),
         ],
     )
@@ -301,7 +306,7 @@ def build_pipeline(
     # ------------------------------------------------------------------
     model_metrics = ModelMetrics(
         model_statistics=MetricsSource(
-            s3_uri=f"{pipeline_s3_root}/evaluation/evaluation.json",
+            s3_uri=_s3("evaluation/evaluation.json"),
             content_type="application/json",
         ),
     )
