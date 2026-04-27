@@ -98,23 +98,33 @@ def google_api_key() -> str:
 
 def label_google(text: str, model: str, temperature: float) -> int:
     """Label text with Google AI Studio"""
-    import google.generativeai as genai
+    try:
+        from google import genai  # pyright: ignore[reportMissingImports]
+        from google.genai import types  # pyright: ignore[reportMissingImports]
+    except ImportError as e:
+        raise RuntimeError("Google provider requires dependency `google-genai`") from e
 
     key = google_api_key()
     if not key:
         raise EnvironmentError("Set GOOGLE_API_KEY or GEMINI_API_KEY (Google AI Studio)")
 
-    genai.configure(api_key=key)
+    client = genai.Client(api_key=key)
     user = USER_TEMPLATE.format(text=text)
-    m = genai.GenerativeModel(model, system_instruction=SYSTEM_PROMPT)
-    resp = m.generate_content(
-        user,
-        generation_config={"temperature": temperature},
+    resp = client.models.generate_content(
+        model=model,
+        contents=user,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=temperature,
+        ),
     )
-    if not resp.candidates:
-        raise ValueError("Empty response (no candidates; possibly blocked)")
-    parts = resp.candidates[0].content.parts
-    raw = "".join(getattr(p, "text", "") or "" for p in parts).strip()
+    raw = (getattr(resp, "text", "") or "").strip()
+    if not raw:
+        candidates = getattr(resp, "candidates", None) or []
+        if not candidates:
+            raise ValueError("Empty response (no candidates; possibly blocked)")
+        parts = (getattr(getattr(candidates[0], "content", None), "parts", None)) or []
+        raw = "".join(getattr(p, "text", "") or "" for p in parts).strip()
     lid = normalize_label(raw)
     if lid is None:
         raise ValueError(f"Unparseable model output: {raw!r}")
