@@ -6,7 +6,6 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -69,58 +68,25 @@ class TestPrepareTrainingData:
     def _run_prep(
         self, tmp_path: Path, phrasebank_txt: Path, curated_dir: Path
     ) -> dict[str, Path]:
-        """Import and run prepare_training_data.main() with monkeypatched I/O paths."""
+        """Import and run prepare_training_data helpers with patched I/O paths."""
         import importlib.util
+        import os
 
         spec = importlib.util.spec_from_file_location(
             "prepare_training_data", PIPELINE_SCRIPTS / "prepare_training_data.py",
         )
         mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
 
         out_mlm = tmp_path / "output" / "mlm_corpus"
         out_pb = tmp_path / "output" / "phrasebank_train"
         out_pseudo = tmp_path / "output" / "pseudo_data"
         out_test = tmp_path / "output" / "test_data"
 
-        # Monkey-patch _download_phrasebank to return our fixture file
-        original_download = None
-
-        def _fake_download(dest_dir, subset="Sentences_75Agree.txt"):
-            return phrasebank_txt
-
-        spec.loader.exec_module(mod)
-        original_download = mod._download_phrasebank
-        mod._download_phrasebank = _fake_download
-
-        import os
         old_env = os.environ.get("SM_CHANNEL_CURATED")
         os.environ["SM_CHANNEL_CURATED"] = str(curated_dir)
-
-        # Monkey-patch output paths
-        orig_main = mod.main
-
-        def patched_main():
-            mod.Path = Path
-            orig_parse = mod.argparse.ArgumentParser.parse_args
-
-            def fake_parse(self, argv=None):
-                import argparse
-                return argparse.Namespace(
-                    test_ratio=0.20,
-                    seed=42,
-                    phrasebank_subset="Sentences_75Agree.txt",
-                )
-
-            mod.argparse.ArgumentParser.parse_args = fake_parse
-
-            # Override the output path constants via the function's local assignments
-            import types
-            original_main_code = mod.main
-
-            # Direct execution with patched env + output paths
-            input_curated = curated_dir
-            pb_txt_path = phrasebank_txt
-            df_pb = mod._load_phrasebank(pb_txt_path)
+        try:
+            df_pb = mod._load_phrasebank(phrasebank_txt)
 
             from sklearn.model_selection import train_test_split
 
@@ -129,7 +95,7 @@ class TestPrepareTrainingData:
                 df_pb, test_size=0.20, random_state=42, stratify=strat,
             )
 
-            df_curated = mod._load_curated_jsonl(input_curated)
+            df_curated = mod._load_curated_jsonl(curated_dir)
 
             all_texts = pb_train["text"].tolist()
             if not df_curated.empty:
@@ -141,13 +107,11 @@ class TestPrepareTrainingData:
             else:
                 mod._write_jsonl(pd.DataFrame(columns=["text", "label"]), out_pseudo / "pseudo.jsonl")
             mod._write_jsonl(pb_test, out_test / "test.jsonl")
-
-        patched_main()
-
-        if old_env is not None:
-            os.environ["SM_CHANNEL_CURATED"] = old_env
-        else:
-            os.environ.pop("SM_CHANNEL_CURATED", None)
+        finally:
+            if old_env is not None:
+                os.environ["SM_CHANNEL_CURATED"] = old_env
+            else:
+                os.environ.pop("SM_CHANNEL_CURATED", None)
 
         return {
             "mlm_corpus": out_mlm,
