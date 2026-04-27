@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react'
+import { formatScore } from '../formatScore'
 import type { SentimentRow } from '../types'
 import { scoreToCardStyle } from '../scoreColor'
 
@@ -10,12 +11,6 @@ type Props = {
   searchLoading: boolean
   searchResult: SentimentRow | null
   searchSource: 'heatmap' | 'cached' | 'live' | null
-}
-
-function formatScore(score: number): string {
-  if (!Number.isFinite(score)) return '—'
-  const s = score.toFixed(4)
-  return score >= 0 ? `+${s}` : s
 }
 
 export function SearchPanel({

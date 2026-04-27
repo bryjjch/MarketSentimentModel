@@ -54,10 +54,15 @@ export async function postSentimentBySymbol(
       options: { max_articles: 12, include_social: true },
     }),
   })
-  const data = (await res.json()) as SentimentRow
   if (!res.ok) {
-    const msg = data.message ?? data.error ?? res.statusText
+    let msg = res.statusText
+    try {
+      const errData = (await res.json()) as SentimentRow
+      msg = errData.message ?? errData.error ?? msg
+    } catch {
+      /* non-JSON error body — fall through to statusText */
+    }
     throw new Error(msg || `Request failed (${res.status})`)
   }
-  return data
+  return (await res.json()) as SentimentRow
 }
