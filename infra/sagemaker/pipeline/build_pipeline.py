@@ -25,14 +25,15 @@ from pathlib import Path
 
 import sagemaker
 from sagemaker.workflow.pipeline import Pipeline
+from sagemaker.workflow.pipeline_context import PipelineSession
 
 
-def _offline_session(region: str, default_bucket: str) -> sagemaker.Session:
+def _offline_session(region: str, default_bucket: str) -> PipelineSession:
     """Create a session for JSON generation."""
     import boto3
 
     boto_session = boto3.Session(region_name=region)
-    return sagemaker.Session(
+    return PipelineSession(
         boto_session=boto_session,
         default_bucket=default_bucket,
     )
