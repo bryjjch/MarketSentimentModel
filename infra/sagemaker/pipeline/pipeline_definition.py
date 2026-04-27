@@ -15,8 +15,7 @@ or upserted directly via the SageMaker API.
 
 from __future__ import annotations
 
-import shutil
-import tempfile
+import os
 from pathlib import Path
 
 import sagemaker
@@ -30,6 +29,7 @@ from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
 from sagemaker.workflow.functions import Join, JsonGet
 from sagemaker.workflow.parameters import ParameterFloat, ParameterInteger, ParameterString
 from sagemaker.workflow.pipeline import Pipeline
+from sagemaker.workflow.pipeline_context import PipelineSession
 from sagemaker.workflow.properties import PropertyFile
 from sagemaker.workflow.step_collections import RegisterModel
 from sagemaker.workflow.steps import ProcessingStep, TrainingStep
@@ -44,7 +44,17 @@ PIPELINE_NAME = "FinSenseSentimentPipeline"
 
 
 def _resolve(p: Path) -> str:
-    return str(p.resolve())
+    resolved = p.resolve()
+    if os.name != "nt":
+        return str(resolved)
+
+    # Emit project-relative POSIX paths on Windows to avoid scheme parsing.
+    cwd = Path.cwd().resolve()
+    try:
+        return resolved.relative_to(cwd).as_posix()
+    except ValueError:
+        rel = os.path.relpath(str(resolved), str(cwd))
+        return Path(rel).as_posix()
 
 
 def build_pipeline(
@@ -67,7 +77,7 @@ def build_pipeline(
     sagemaker_session:
         Optional pre-configured session (useful for local / offline JSON generation).
     """
-    session = sagemaker_session or sagemaker.Session()
+    session = sagemaker_session or PipelineSession()
     bucket = default_bucket or session.default_bucket()
 
     # ------------------------------------------------------------------
@@ -180,6 +190,7 @@ def build_pipeline(
         source_dir=_resolve(_ENTRY_POINTS_DIR),
         dependencies=[_resolve(_TRAINING_PKG_DIR)],
         image_uri=param_train_image,
+        py_version="py310",
         role=role,
         instance_count=1,
         instance_type=param_training_instance,
@@ -213,6 +224,7 @@ def build_pipeline(
         source_dir=_resolve(_ENTRY_POINTS_DIR),
         dependencies=[_resolve(_TRAINING_PKG_DIR)],
         image_uri=param_train_image,
+        py_version="py310",
         role=role,
         instance_count=1,
         instance_type=param_training_instance,
@@ -262,47 +274,36 @@ def build_pipeline(
         sagemaker_session=session,
     )
 
-    # Bundle evaluate_classifier.py together with the training package so that
-    # `from training.evaluation import classification_metrics` resolves in the container.
-    eval_bundle_dir = Path(tempfile.mkdtemp(prefix="finsense_eval_"))
-    try:
-        shutil.copy(_SCRIPTS_DIR / "evaluate_classifier.py", eval_bundle_dir / "evaluate_classifier.py")
-        shutil.copytree(_TRAINING_PKG_DIR, eval_bundle_dir / "training")
+    eval_property_file = PropertyFile(
+        name="EvaluationReport",
+        output_name="evaluation",
+        path="evaluation.json",
+    )
 
-        eval_property_file = PropertyFile(
-            name="EvaluationReport",
-            output_name="evaluation",
-            path="evaluation.json",
-        )
-
-        eval_args = eval_processor.run(
-            code="evaluate_classifier.py",
-            source_dir=str(eval_bundle_dir),
-            inputs=[
-                ProcessingInput(
-                    source=step_clf_train.properties.ModelArtifacts.S3ModelArtifacts,
-                    input_name="model",
-                    destination="/opt/ml/processing/input/model",
-                ),
-                ProcessingInput(
-                    source=step_data_prep.properties.ProcessingOutputConfig.Outputs[
-                        "test_data"
-                    ].S3Output.S3Uri,
-                    input_name="test",
-                    destination="/opt/ml/processing/input/test",
-                ),
-            ],
-            outputs=[
-                ProcessingOutput(
-                    output_name="evaluation",
-                    source="/opt/ml/processing/output/evaluation",
-                    destination=_s3("evaluation"),
-                ),
-            ],
-        )
-    finally:
-        # ignore_errors=True prevents a cleanup failure from masking a real build error.
-        shutil.rmtree(eval_bundle_dir, ignore_errors=True)
+    eval_args = eval_processor.run(
+        code=_resolve(_SCRIPTS_DIR / "evaluate_classifier.py"),
+        inputs=[
+            ProcessingInput(
+                source=step_clf_train.properties.ModelArtifacts.S3ModelArtifacts,
+                input_name="model",
+                destination="/opt/ml/processing/input/model",
+            ),
+            ProcessingInput(
+                source=step_data_prep.properties.ProcessingOutputConfig.Outputs[
+                    "test_data"
+                ].S3Output.S3Uri,
+                input_name="test",
+                destination="/opt/ml/processing/input/test",
+            ),
+        ],
+        outputs=[
+            ProcessingOutput(
+                output_name="evaluation",
+                source="/opt/ml/processing/output/evaluation",
+                destination=_s3("evaluation"),
+            ),
+        ],
+    )
 
     step_evaluation = ProcessingStep(
         name="EvaluateClassifier",

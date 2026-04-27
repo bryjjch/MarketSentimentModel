@@ -22,9 +22,55 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_recall_fscore_support,
+)
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from training.evaluation import classification_metrics
+try:
+    from training.evaluation import classification_metrics
+except ModuleNotFoundError:
+    def classification_metrics(
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
+        *,
+        num_labels: int = 3,
+        label_names: tuple[str, ...] = ("negative", "neutral", "positive"),
+    ) -> dict[str, float]:
+        y_true = np.asarray(y_true).astype(int).ravel()
+        y_pred = np.asarray(y_pred).astype(int).ravel()
+        labels = list(range(num_labels))
+
+        acc = float(accuracy_score(y_true, y_pred))
+        macro_f1 = float(f1_score(y_true, y_pred, average="macro", labels=labels, zero_division=0))
+        weighted_f1 = float(
+            f1_score(y_true, y_pred, average="weighted", labels=labels, zero_division=0)
+        )
+
+        prec, rec, f1, _ = precision_recall_fscore_support(
+            y_true, y_pred, average=None, labels=labels, zero_division=0
+        )
+        out: dict[str, float] = {
+            "accuracy": acc,
+            "macro_f1": macro_f1,
+            "weighted_f1": weighted_f1,
+            "precision_macro": float(np.mean(prec)),
+            "recall_macro": float(np.mean(rec)),
+        }
+        for i in range(num_labels):
+            name = label_names[i] if i < len(label_names) else str(i)
+            out[f"precision_{name}"] = float(prec[i])
+            out[f"recall_{name}"] = float(rec[i])
+            out[f"f1_{name}"] = float(f1[i])
+
+        cm = confusion_matrix(y_true, y_pred, labels=labels)
+        for i in range(num_labels):
+            for j in range(num_labels):
+                out[f"cm_{i}_{j}"] = float(cm[i, j])
+        return out
 
 
 def _safe_extractall(tar: tarfile.TarFile, extract_to: Path) -> None:

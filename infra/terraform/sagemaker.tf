@@ -47,7 +47,7 @@ resource "aws_sagemaker_model_package_group" "sentiment" {
 
 resource "aws_sagemaker_pipeline" "training" {
   pipeline_name         = local.pipeline_name
-  pipeline_display_name = "${var.project_name} Sentiment Training Pipeline"
+  pipeline_display_name = "${var.project_name}-sentiment-training-pipeline"
   role_arn              = aws_iam_role.sagemaker_pipeline.arn
 
   pipeline_definition = var.pipeline_definition_json != "" ? var.pipeline_definition_json : file(var.pipeline_definition_path)
