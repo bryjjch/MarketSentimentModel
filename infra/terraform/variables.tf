@@ -94,7 +94,7 @@ variable "sentiment_cache_ttl_seconds" {
 variable "top_tickers_json" {
   type        = string
   description = "JSON array of tickers stored in SSM at /{project_name}/top-tickers for the ingestion Lambda."
-  default     = "[\"AAPL\",\"MSFT\",\"GOOGL\"]"
+  default     = "[\"AAPL\",\"MSFT\",\"GOOGL\",\"META\",\"NVDA\"]"
 }
 
 # --- Data bucket + daily ingestion / pseudo-labeling pipeline ---------------
