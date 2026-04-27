@@ -14,7 +14,10 @@ resource "aws_lambda_function" "pseudo_label" {
   filename         = data.archive_file.pseudo_label_lambda.output_path
   source_code_hash = data.archive_file.pseudo_label_lambda.output_base64sha256
 
-  layers = [aws_lambda_layer_version.finsense_shared.arn]
+  layers = [
+    aws_lambda_layer_version.finsense_shared.arn,
+    aws_lambda_layer_version.finsense_deps.arn,
+  ]
 
   timeout     = 600
   memory_size = var.pseudo_label_lambda_memory_mb

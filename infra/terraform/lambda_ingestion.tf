@@ -14,7 +14,10 @@ resource "aws_lambda_function" "ingestion" {
   filename         = data.archive_file.ingestion_lambda.output_path
   source_code_hash = data.archive_file.ingestion_lambda.output_base64sha256
 
-  layers = [aws_lambda_layer_version.finsense_shared.arn]
+  layers = [
+    aws_lambda_layer_version.finsense_shared.arn,
+    aws_lambda_layer_version.finsense_deps.arn,
+  ]
 
   timeout     = 600
   memory_size = var.ingestion_lambda_memory_mb
