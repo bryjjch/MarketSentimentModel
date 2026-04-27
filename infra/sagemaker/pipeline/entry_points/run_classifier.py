@@ -13,6 +13,16 @@ import tarfile
 from pathlib import Path
 
 
+def _safe_extractall(tar: tarfile.TarFile, extract_to: Path) -> None:
+    """Extract all tar members, rejecting any paths that escape *extract_to*."""
+    abs_dest = extract_to.resolve()
+    for member in tar.getmembers():
+        member_path = (abs_dest / member.name).resolve()
+        if not str(member_path).startswith(str(abs_dest) + os.sep) and member_path != abs_dest:
+            raise ValueError(f"Refusing unsafe tar member path: {member.name!r}")
+    tar.extractall(extract_to)
+
+
 def _extract_channel_tar(channel_dir: Path) -> Path:
     """If *channel_dir* contains a single tar.gz, extract and return the extracted path."""
     if not channel_dir.is_dir():
@@ -24,7 +34,7 @@ def _extract_channel_tar(channel_dir: Path) -> Path:
     dest.mkdir(exist_ok=True)
     for t in tars:
         with tarfile.open(t, "r:gz") as tf:
-            tf.extractall(dest)
+            _safe_extractall(tf, dest)
     return dest
 
 
