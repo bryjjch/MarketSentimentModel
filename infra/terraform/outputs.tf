@@ -71,3 +71,18 @@ output "ingestion_rule_name" {
   description = "EventBridge rule name for the daily ingestion fan-out."
   value       = aws_cloudwatch_event_rule.ingestion.name
 }
+
+output "pipeline_name" {
+  description = "SageMaker Pipeline name for the training/evaluation/registration flow."
+  value       = aws_sagemaker_pipeline.training.pipeline_name
+}
+
+output "pipeline_role_arn" {
+  description = "IAM role ARN used by the SageMaker Pipeline."
+  value       = aws_iam_role.sagemaker_pipeline.arn
+}
+
+output "model_package_group_name" {
+  description = "SageMaker Model Package Group for registered model versions."
+  value       = aws_sagemaker_model_package_group.sentiment.model_package_group_name
+}

@@ -211,11 +211,101 @@ aws lambda invoke --function-name "$(terraform output -raw ingestion_function_na
   --payload '{"symbol":"AAPL","options":{"max_articles":10}}' /tmp/ingest.json
 ```
 
-## 8. Updating the model
+## 8. SageMaker training pipeline
+
+A **SageMaker Pipeline** orchestrates the full training workflow: data preparation,
+MLM continued pre-training, classifier fine-tuning, held-out evaluation, quality gating,
+and model registration.
+
+### Pipeline DAG
+
+```
+DataPrep (Processing)
+    -> MLM Pre-Training (Training)
+    -> Classifier Training (Training)
+    -> Evaluate Classifier (Processing)
+    -> Check macro_f1 >= threshold (Condition)
+        [pass] -> Register Model (Model Package)
+        [fail] -> pipeline ends without registration
+```
+
+### Pipeline code layout
+
+| Path | Purpose |
+|------|---------|
+| [`sagemaker/pipeline/pipeline_definition.py`](sagemaker/pipeline/pipeline_definition.py) | Builds the `sagemaker.workflow.pipeline.Pipeline` object via the Python SDK. |
+| [`sagemaker/pipeline/build_pipeline.py`](sagemaker/pipeline/build_pipeline.py) | CLI helper to generate pipeline definition JSON (or upsert directly). |
+| [`sagemaker/pipeline/scripts/prepare_training_data.py`](sagemaker/pipeline/scripts/prepare_training_data.py) | Processing script: assembles curated data + PhraseBank (from S3 `reference/phrasebank/`), produces MLM corpus, classifier data, and held-out test split. |
+| [`sagemaker/pipeline/scripts/evaluate_classifier.py`](sagemaker/pipeline/scripts/evaluate_classifier.py) | Processing script: loads trained classifier, evaluates against the held-out test set, writes `evaluation.json`. |
+| [`sagemaker/pipeline/entry_points/run_mlm.py`](sagemaker/pipeline/entry_points/run_mlm.py) | Thin wrapper for `training.train_mlm:main` (resolves relative imports under SageMaker). |
+| [`sagemaker/pipeline/entry_points/run_classifier.py`](sagemaker/pipeline/entry_points/run_classifier.py) | Thin wrapper for `training.train_classifier:main`. |
+
+### Build and deploy the pipeline
+
+1. Generate the pipeline definition JSON from the Python SDK:
+
+```bash
+cd <repo-root>
+python -m infra.sagemaker.pipeline.build_pipeline \
+    --role arn:aws:iam::123456789012:role/finsense-sagemaker-pipeline \
+    --region us-east-1 \
+    --output infra/terraform/pipeline_definition.json
+```
+
+2. Deploy with Terraform:
+
+```bash
+cd infra/terraform
+terraform apply   # picks up pipeline_definition.json automatically
+```
+
+3. Start a pipeline execution (AWS CLI):
+
+```bash
+aws sagemaker start-pipeline-execution \
+    --pipeline-name "$(terraform output -raw pipeline_name)" \
+    --pipeline-parameters '[
+        {"Name":"DataBucket","Value":"finsense-data-123456789012"},
+        {"Name":"CuratedS3Prefix","Value":"s3://finsense-data-123456789012/curated/"}
+    ]'
+```
+
+### Pipeline parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `DataBucket` | session default | S3 bucket for intermediate pipeline artifacts. |
+| `CuratedS3Prefix` | `curated/` | S3 prefix for curated training data from the ingestion pipeline. |
+| `PhraseBankS3Prefix` | `reference/phrasebank/` | S3 prefix where `Sentences_75Agree.txt` is stored (uploaded by Terraform). |
+| `BaseModel` | `bert-base-uncased` | Hugging Face checkpoint for MLM + classifier. |
+| `TrainImageUri` | HF PyTorch training DLC | Training container image. |
+| `InferenceImageUri` | HF PyTorch inference DLC | Inference image used when registering the model package. |
+| `ProcessingInstanceType` | `ml.m5.xlarge` | Instance type for data prep and evaluation. |
+| `TrainingInstanceType` | `ml.g4dn.xlarge` | Instance type for MLM and classifier training. |
+| `MlmEpochs` | `3` | MLM pre-training epochs. |
+| `ClfEpochs` | `3` | Classifier fine-tuning epochs. |
+| `ModelPackageGroup` | `finsense-sentiment` | Model Package Group for accepted models. |
+| `MacroF1Threshold` | `0.80` | Minimum macro F1 on the held-out test set to register. |
+| `TestRatio` | `0.10` | Fraction of PhraseBank held out for evaluation. |
+| `Seed` | `42` | Random seed for reproducibility. |
+
+### Terraform variables (pipeline-specific)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `pipeline_name` | `{project_name}-training-pipeline` | SageMaker Pipeline resource name. |
+| `pipeline_definition_json` | `""` | Inline JSON (takes precedence over file). |
+| `pipeline_definition_path` | `pipeline_definition.json` | Path to the generated JSON file. |
+| `model_package_group_name` | `finsense-sentiment` | Model Package Group. |
+| `phrasebank_path` | `../../data/FinancialPhraseBank-v1.0/FinancialPhraseBank-v1.0/Sentences_75Agree.txt` | Local path to PhraseBank file, uploaded to the data bucket under `reference/phrasebank/`. |
+| `pipeline_macro_f1_threshold` | `0.80` | Threshold (for documentation; runtime value is a pipeline parameter). |
+
+## 9. Updating the model
 
 1. Launch a new SageMaker training job (or re-run locally and repackage `outputs/<run>/` into a fresh `model.tar.gz`); point `model_tarball_path` at the new artifact.
 2. `terraform apply` (updated `etag` on `aws_s3_object` triggers replacement where needed). SageMaker may require a **new model version** and **endpoint update**; Terraform replaces dependent resources when the object or model resource changes. For advanced blue/green deployments, extend the Terraform or use SageMaker deployment operations separately.
+3. **Pipeline-driven updates**: run a pipeline execution instead of manual training. When the model passes the quality gate, it is registered in the Model Package Group. Promote the latest approved version by updating `model_tarball_path` to point at the registered artifact and running `terraform apply`.
 
-## 9. Cost notes
+## 10. Cost notes
 
 The largest ongoing cost is SageMaker inference usage. Serverless avoids paying for idle provisioned instances, but you should still delete the stack when not needed (`terraform destroy`; ensure `s3_force_destroy` if you need the bucket emptied).

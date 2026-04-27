@@ -115,6 +115,14 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             "body": json.dumps({"error": "not_found", "symbol": sym}),
         }
 
+    expires_at = item.get("expires_at")
+    if expires_at is not None and int(expires_at) <= int(time.time()):
+        return {
+            "statusCode": 404,
+            "headers": _JSON,
+            "body": json.dumps({"error": "not_found", "symbol": sym}),
+        }
+
     return {
         "statusCode": 200,
         "headers": _JSON,

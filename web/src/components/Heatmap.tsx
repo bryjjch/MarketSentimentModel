@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react'
 import { fetchSentimentCacheList } from '../api'
+import { formatScore } from '../formatScore'
 import type { SentimentRow } from '../types'
 import { scoreToCardStyle } from '../scoreColor'
 
 type Props = {
   apiBase: string
   onRowsChange?: (rows: SentimentRow[]) => void
-}
-
-function formatScore(score: number): string {
-  if (!Number.isFinite(score)) return '—'
-  const s = score.toFixed(3)
-  return score >= 0 ? `+${s}` : s
 }
 
 export function Heatmap({ apiBase, onRowsChange }: Props) {

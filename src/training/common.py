@@ -5,11 +5,11 @@ from __future__ import annotations
 import math
 import os
 import shutil
+import urllib.request
 import zipfile
 from pathlib import Path
 
 import pandas as pd
-import wget
 
 # Align with Financial PhraseBank strings and inference convention (negative=0, neutral=1, positive=2).
 SENTIMENT_STR_TO_ID = {"negative": 0, "neutral": 1, "positive": 2}
@@ -116,6 +116,16 @@ def copy_serving_code_into(target_dir: str | Path, source_dir: str | Path) -> Pa
     return dst
 
 
+def _safe_zip_extractall(zf: zipfile.ZipFile, extract_dir: Path) -> None:
+    """Extract a ZipFile while guarding against path-traversal entries."""
+    abs_dest = extract_dir.resolve()
+    for member in zf.infolist():
+        member_path = (abs_dest / member.filename).resolve()
+        if not member_path.is_relative_to(abs_dest):
+            raise ValueError(f"Unsafe ZIP member path rejected: {member.filename!r}")
+    zf.extractall(extract_dir)
+
+
 def ensure_finphrasebank(
     data_root: Path | None = None,
     subset: str = "Sentences_75Agree.txt",
@@ -130,13 +140,12 @@ def ensure_finphrasebank(
 
     if not zip_path.is_file():
         print("Downloading Financial PhraseBank...")
-        wget.download(str(FINPHRASE_ZIP_URL), str(zip_path))
-        print()
+        urllib.request.urlretrieve(str(FINPHRASE_ZIP_URL), str(zip_path))
 
     if not extract_dir.is_dir():
         print("Extracting Financial PhraseBank...")
         with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(extract_dir)
+            _safe_zip_extractall(zf, extract_dir)
 
     inner = extract_dir / "FinancialPhraseBank-v1.0" / subset
     if not inner.is_file():

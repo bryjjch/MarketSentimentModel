@@ -13,6 +13,7 @@ resource "aws_lambda_function" "sentiment" {
 
   filename         = data.archive_file.sentiment_lambda.output_path
   source_code_hash = data.archive_file.sentiment_lambda.output_base64sha256
+  layers           = [aws_lambda_layer_version.finsense_shared.arn]
 
   timeout     = 29
   memory_size = 512

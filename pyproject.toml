@@ -17,13 +17,12 @@ dependencies = [
     "scikit-learn>=1.2.0",
     "numpy>=1.23.0",
     "tqdm>=4.65.0",
-    "wget>=3.2",
     "openai>=1.12.0",
     "google-generativeai>=0.8.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "boto3>=1.28.0"]
 
 [project.scripts]
 finsense-pseudo-label = "training.pseudo_label:main"
