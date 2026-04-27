@@ -43,6 +43,8 @@ infra/terraform/terraform.tfvars
 infra/terraform/.terraform/
 infra/terraform/.terraform.lock.hcl
 infra/terraform/pipeline_definition.json
+infra/lambda/_deps_layer/python/*
+!infra/lambda/_deps_layer/python/.gitkeep
 
 # Terraform state and other local artifacts (never commit)
 *.tfstate

@@ -1,8 +1,7 @@
 """Provider-agnostic pseudo-labeler for 3-class sentiment.
 
 Supports ``openai`` (Chat Completions), ``google`` (Gemini via Google AI Studio), and
-``echo`` (offline deterministic stub for plumbing tests). Uses raw ``urllib`` so the
-Lambda deployment package stays tiny (no vendor SDKs required).
+``echo`` (offline deterministic stub for plumbing tests).
 
 Secrets are resolved from AWS Secrets Manager when ``*_SECRET_ARN`` env vars are set;
 otherwise from the matching ``*_API_KEY`` env var. This matches how other Lambdas in
@@ -18,7 +17,6 @@ import os
 import random
 import re
 import urllib.error
-import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
@@ -131,23 +129,31 @@ def _label_openai(text: str, model: str, temperature: float, timeout_s: float, a
 
 
 def _label_google(text: str, model: str, temperature: float, timeout_s: float, api_key: str) -> int:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={urllib.parse.quote(api_key)}"
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": USER_TEMPLATE.format(text=text)}],
-            }
-        ],
-        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-        "generationConfig": {"temperature": temperature},
-    }
-    data = _http_post_json(url, headers={}, payload=payload, timeout_s=timeout_s)
-    candidates = data.get("candidates") or []
-    if not candidates:
-        raise ValueError(f"google empty candidates: {data}")
-    parts = (((candidates[0] or {}).get("content") or {}).get("parts") or [])
-    content = "".join(str(p.get("text") or "") for p in parts).strip()
+    try:
+        from google import genai  # pyright: ignore[reportMissingImports]
+        from google.genai import types  # pyright: ignore[reportMissingImports]
+    except ImportError as e:  # pragma: no cover - runtime dependency check
+        raise RuntimeError("google provider requires dependency `google-genai`") from e
+
+    client = genai.Client(api_key=api_key)
+    user = USER_TEMPLATE.format(text=text)
+    resp = client.models.generate_content(
+        model=model,
+        contents=user,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=temperature,
+            # The SDK does not expose a simple per-request timeout in this call path.
+            # Keep timeout_s in the signature for provider parity and future tuning.
+        ),
+    )
+    content = (getattr(resp, "text", "") or "").strip()
+    if not content:
+        candidates = getattr(resp, "candidates", None) or []
+        if not candidates:
+            raise ValueError(f"google empty candidates: {resp!r}")
+        parts = ((getattr(getattr(candidates[0], "content", None), "parts", None)) or [])
+        content = "".join(str(getattr(p, "text", "") or "") for p in parts).strip()
     lid = normalize_label(content)
     if lid is None:
         raise ValueError(f"unparseable google output: {content!r}")

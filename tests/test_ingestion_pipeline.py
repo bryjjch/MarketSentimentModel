@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import json
+import sys
+from types import ModuleType
 
 import pytest
 
@@ -18,7 +20,7 @@ from finsense_shared import (
     raw_key,
 )
 from finsense_shared.confidence import ConfidenceMetric
-from finsense_shared.llm_label import LABEL_ID_TO_STR, normalize_label, pseudo_label_text
+from finsense_shared.llm_label import LABEL_ID_TO_STR, SYSTEM_PROMPT, normalize_label, pseudo_label_text
 
 
 class _FakeS3:
@@ -103,6 +105,112 @@ def test_pseudo_label_text_echo_provider_is_deterministic() -> None:
     assert a.label_id == b.label_id
     assert LABEL_ID_TO_STR[a.label_id] == a.label_name
     assert a.provider == "echo"
+
+
+def _install_fake_google_genai(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    response: object,
+) -> dict[str, object]:
+    """Register minimal ``google`` / ``google.genai`` modules so ``_label_google`` can run without the real SDK."""
+
+    last: dict[str, object] = {}
+
+    class _FakeModels:
+        def generate_content(self, *, model: str, contents: str, config: object) -> object:
+            last["model"] = model
+            last["contents"] = contents
+            last["config"] = config
+            return response
+
+    class _FakeClient:
+        def __init__(self, api_key: str | None = None) -> None:
+            last["api_key"] = api_key
+            self.models = _FakeModels()
+
+    types_mod = ModuleType("google.genai.types")
+
+    class GenerateContentConfig:
+        def __init__(
+            self,
+            *,
+            system_instruction: str | None = None,
+            temperature: float | None = None,
+        ) -> None:
+            self.system_instruction = system_instruction
+            self.temperature = temperature
+
+    types_mod.GenerateContentConfig = GenerateContentConfig
+
+    genai_mod = ModuleType("google.genai")
+    genai_mod.Client = _FakeClient
+    genai_mod.types = types_mod
+
+    google_mod = ModuleType("google")
+    google_mod.__path__ = []
+
+    monkeypatch.setitem(sys.modules, "google.genai.types", types_mod)
+    monkeypatch.setitem(sys.modules, "google.genai", genai_mod)
+    monkeypatch.setitem(sys.modules, "google", google_mod)
+
+    return last
+
+
+def test_pseudo_label_text_google_provider_parses_resp_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
+
+    resp = ModuleType("resp")
+    resp.text = "positive"
+    resp.candidates = []
+
+    last = _install_fake_google_genai(monkeypatch, response=resp)
+
+    out = pseudo_label_text(
+        "EPS beat expectations",
+        provider="google",
+        model="gemini-test",
+        temperature=0.1,
+    )
+
+    assert out.provider == "google"
+    assert out.label_id == 2
+    assert out.label_name == "positive"
+    assert out.model == "gemini-test"
+
+    cfg = last["config"]
+    assert getattr(cfg, "system_instruction", None) == SYSTEM_PROMPT
+    assert getattr(cfg, "temperature", None) == pytest.approx(0.1)
+    assert last["model"] == "gemini-test"
+    assert last["api_key"] == "test-google-key"
+    assert "EPS beat expectations" in str(last["contents"])
+
+
+def test_pseudo_label_text_google_provider_fallback_to_candidates_when_text_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+
+    class _Part:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+    class _Content:
+        def __init__(self, parts: list[_Part]) -> None:
+            self.parts = parts
+
+    class _Candidate:
+        def __init__(self, parts: list[_Part]) -> None:
+            self.content = _Content(parts)
+
+    resp = ModuleType("resp")
+    resp.text = ""
+    resp.candidates = [_Candidate([_Part("negative")])]
+
+    _install_fake_google_genai(monkeypatch, response=resp)
+
+    out = pseudo_label_text("Guidance cut", provider="google")
+    assert out.label_id == 0
+    assert out.label_name == "negative"
 
 
 def test_normalize_label_accepts_sentences() -> None:

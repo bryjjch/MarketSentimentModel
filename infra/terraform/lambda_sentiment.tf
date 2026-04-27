@@ -7,13 +7,16 @@ data "archive_file" "sentiment_lambda" {
 
 resource "aws_lambda_function" "sentiment" {
   function_name = "${var.project_name}-sentiment"
-  role            = aws_iam_role.sentiment_lambda.arn
-  handler         = "handler.lambda_handler"
-  runtime         = "python3.12"
+  role          = aws_iam_role.sentiment_lambda.arn
+  handler       = "handler.lambda_handler"
+  runtime       = "python3.12"
 
   filename         = data.archive_file.sentiment_lambda.output_path
   source_code_hash = data.archive_file.sentiment_lambda.output_base64sha256
-  layers           = [aws_lambda_layer_version.finsense_shared.arn]
+  layers = [
+    aws_lambda_layer_version.finsense_shared.arn,
+    aws_lambda_layer_version.finsense_deps.arn,
+  ]
 
   timeout     = 29
   memory_size = 512
@@ -21,9 +24,9 @@ resource "aws_lambda_function" "sentiment" {
   environment {
     variables = {
       SAGEMAKER_ENDPOINT_NAME = aws_sagemaker_endpoint.classifier.name
-      REDDIT_SECRET_ARN = var.reddit_credentials_secret_arn
-      RECENT_HEADLINES_MAX = "10"
-      DEFAULT_MAX_ARTICLES = "12"
+      REDDIT_SECRET_ARN       = var.reddit_credentials_secret_arn
+      RECENT_HEADLINES_MAX    = "10"
+      DEFAULT_MAX_ARTICLES    = "12"
     }
   }
 

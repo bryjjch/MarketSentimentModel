@@ -15,7 +15,8 @@ A second **daily ingestion pipeline** (EventBridge → ingestion Lambda → pred
 | [`lambda/ingestion/handler.py`](lambda/ingestion/handler.py) | **Daily ingestion** Lambda: EventBridge fan-out that collects raw news/social text per ticker and writes it to `raw/` in the data bucket, then async-invokes the prediction Lambda per symbol. |
 | [`lambda/prediction/handler.py`](lambda/prediction/handler.py) | Reads one `raw/` partition, runs SageMaker in batches, writes per-text rows to `predictions/`, writes high-confidence rows to `curated/`, fans low-confidence rows out to the pseudo-label Lambda, and refreshes the DynamoDB `sentiment_cache` row used by the existing read API. |
 | [`lambda/pseudo_label/handler.py`](lambda/pseudo_label/handler.py) | Provider-agnostic LLM labeler (`openai`, `google`, or offline `echo`). Writes `pseudo/` rows and merges newly-labeled rows into `curated/` with `source=pseudo`. |
-| [`lambda/_layer/python/finsense_shared/`](lambda/_layer/python/finsense_shared/) | Shared Lambda Layer: source adapters, S3 I/O, SageMaker batch invoker, confidence math, Hive-style key helpers, and the urllib-based provider-agnostic LLM client. |
+| [`lambda/_layer/python/finsense_shared/`](lambda/_layer/python/finsense_shared/) | Shared Lambda code layer: source adapters, S3 I/O, SageMaker batch invoker, confidence math, Hive-style key helpers, and LLM labeling logic. |
+| [`lambda/_deps_layer/`](lambda/_deps_layer/) | Shared Lambda dependency layer (`python/` site-packages) for third-party SDKs such as OpenAI and Google GenAI. |
 | [`terraform/`](terraform/) | Declarative AWS resources (S3, IAM, SageMaker model/endpoint, Lambda, HTTP API, DynamoDB, EventBridge). |
 
 ## 1. Obtain `model.tar.gz`
@@ -60,7 +61,13 @@ terraform apply
 
 `model_tarball_path` is resolved with `abspath()` relative to your current working directory when you run `apply`; paths like `../../model.tar.gz` from `infra/terraform` work if `model.tar.gz` lives at the repo root.
 
-**Order of creation:** S3 upload (`aws_s3_object`) → SageMaker model → endpoint configuration → endpoint → Lambda IAM + functions (predict, sentiment, cache_read, pseudo_label, prediction, ingestion) → Lambda Layer (`finsense_shared`) → API routes → DynamoDB / SSM → EventBridge ingestion schedule. The first `apply` can take **15–25+ minutes** while the endpoint becomes `InService`.
+**Order of creation:** S3 upload (`aws_s3_object`) → SageMaker model → endpoint configuration → endpoint → Lambda IAM + functions (predict, sentiment, cache_read, pseudo_label, prediction, ingestion) → Lambda Layers (`finsense_shared` + `finsense_deps`) → API routes → DynamoDB / SSM → EventBridge ingestion schedule. The first `apply` can take **15–25+ minutes** while the endpoint becomes `InService`.
+
+Before `terraform apply`, install dependency packages into the deps layer payload:
+
+```bash
+pip install --target infra/lambda/_deps_layer/python -r infra/lambda/_deps_layer/requirements.txt
+```
 
 ## 5. SageMaker endpoint (Terraform)
 
