@@ -22,8 +22,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+from training.evaluation import classification_metrics
 
 
 def _safe_extractall(tar: tarfile.TarFile, extract_to: Path) -> None:
@@ -69,32 +70,6 @@ def _load_test_data(test_dir: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _compute_metrics(
-    y_true: np.ndarray, y_pred: np.ndarray, num_labels: int = 3
-) -> dict[str, float]:
-    labels = list(range(num_labels))
-    acc = float(accuracy_score(y_true, y_pred))
-    macro_f1 = float(f1_score(y_true, y_pred, average="macro", labels=labels, zero_division=0))
-    weighted_f1 = float(f1_score(y_true, y_pred, average="weighted", labels=labels, zero_division=0))
-    prec, rec, f1, _ = precision_recall_fscore_support(
-        y_true, y_pred, average=None, labels=labels, zero_division=0,
-    )
-    label_names = ("negative", "neutral", "positive")
-    out: dict[str, float] = {
-        "accuracy": acc,
-        "macro_f1": macro_f1,
-        "weighted_f1": weighted_f1,
-        "precision_macro": float(np.mean(prec)),
-        "recall_macro": float(np.mean(rec)),
-    }
-    for i in range(num_labels):
-        name = label_names[i] if i < len(label_names) else str(i)
-        out[f"precision_{name}"] = float(prec[i])
-        out[f"recall_{name}"] = float(rec[i])
-        out[f"f1_{name}"] = float(f1[i])
-    return out
-
-
 def main() -> None:
     model_dir = Path(os.environ.get("SM_CHANNEL_MODEL", "/opt/ml/processing/input/model"))
     test_dir = Path(os.environ.get("SM_CHANNEL_TEST", "/opt/ml/processing/input/test"))
@@ -133,7 +108,7 @@ def main() -> None:
         all_preds.extend(preds)
 
     y_pred = np.array(all_preds)
-    metrics = _compute_metrics(labels, y_pred)
+    metrics = classification_metrics(labels, y_pred)
 
     # SageMaker Pipelines PropertyFile-compatible format
     evaluation = {

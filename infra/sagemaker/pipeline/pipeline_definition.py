@@ -15,6 +15,8 @@ or upserted directly via the SageMaker API.
 
 from __future__ import annotations
 
+import shutil
+import tempfile
 from pathlib import Path
 
 import sagemaker
@@ -250,36 +252,47 @@ def build_pipeline(
         sagemaker_session=session,
     )
 
-    eval_property_file = PropertyFile(
-        name="EvaluationReport",
-        output_name="evaluation",
-        path="evaluation.json",
-    )
+    # Bundle evaluate_classifier.py together with the training package so that
+    # `from training.evaluation import classification_metrics` resolves in the container.
+    eval_bundle_dir = Path(tempfile.mkdtemp(prefix="finsense_eval_"))
+    try:
+        shutil.copy(_SCRIPTS_DIR / "evaluate_classifier.py", eval_bundle_dir / "evaluate_classifier.py")
+        shutil.copytree(_TRAINING_PKG_DIR, eval_bundle_dir / "training")
 
-    eval_args = eval_processor.run(
-        code=_resolve(_SCRIPTS_DIR / "evaluate_classifier.py"),
-        inputs=[
-            ProcessingInput(
-                source=step_clf_train.properties.ModelArtifacts.S3ModelArtifacts,
-                input_name="model",
-                destination="/opt/ml/processing/input/model",
-            ),
-            ProcessingInput(
-                source=step_data_prep.properties.ProcessingOutputConfig.Outputs[
-                    "test_data"
-                ].S3Output.S3Uri,
-                input_name="test",
-                destination="/opt/ml/processing/input/test",
-            ),
-        ],
-        outputs=[
-            ProcessingOutput(
-                output_name="evaluation",
-                source="/opt/ml/processing/output/evaluation",
-                destination=_s3("evaluation"),
-            ),
-        ],
-    )
+        eval_property_file = PropertyFile(
+            name="EvaluationReport",
+            output_name="evaluation",
+            path="evaluation.json",
+        )
+
+        eval_args = eval_processor.run(
+            code="evaluate_classifier.py",
+            source_dir=str(eval_bundle_dir),
+            inputs=[
+                ProcessingInput(
+                    source=step_clf_train.properties.ModelArtifacts.S3ModelArtifacts,
+                    input_name="model",
+                    destination="/opt/ml/processing/input/model",
+                ),
+                ProcessingInput(
+                    source=step_data_prep.properties.ProcessingOutputConfig.Outputs[
+                        "test_data"
+                    ].S3Output.S3Uri,
+                    input_name="test",
+                    destination="/opt/ml/processing/input/test",
+                ),
+            ],
+            outputs=[
+                ProcessingOutput(
+                    output_name="evaluation",
+                    source="/opt/ml/processing/output/evaluation",
+                    destination=_s3("evaluation"),
+                ),
+            ],
+        )
+    finally:
+        # ignore_errors=True prevents a cleanup failure from masking a real build error.
+        shutil.rmtree(eval_bundle_dir, ignore_errors=True)
 
     step_evaluation = ProcessingStep(
         name="EvaluateClassifier",
