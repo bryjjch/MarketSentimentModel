@@ -34,6 +34,16 @@ FINPHRASE_ZIP_URL = (
 )
 
 
+def _safe_zip_extractall(zf: zipfile.ZipFile, extract_dir: Path) -> None:
+    """Extract a ZipFile while guarding against path-traversal entries."""
+    extract_dir_resolved = extract_dir.resolve()
+    for member in zf.infolist():
+        member_path = (extract_dir_resolved / member.filename).resolve()
+        if not member_path.is_relative_to(extract_dir_resolved):
+            raise ValueError(f"Unsafe ZIP member path rejected: {member.filename!r}")
+    zf.extractall(extract_dir)
+
+
 def _download_phrasebank(dest_dir: Path, subset: str = "Sentences_75Agree.txt") -> Path:
     """Download and extract Financial PhraseBank; return path to the chosen subset file."""
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -45,7 +55,7 @@ def _download_phrasebank(dest_dir: Path, subset: str = "Sentences_75Agree.txt") 
         print()
     if not extract_dir.is_dir():
         with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(extract_dir)
+            _safe_zip_extractall(zf, extract_dir)
     inner = extract_dir / "FinancialPhraseBank-v1.0" / subset
     if not inner.is_file():
         raise FileNotFoundError(f"Expected {inner}")
