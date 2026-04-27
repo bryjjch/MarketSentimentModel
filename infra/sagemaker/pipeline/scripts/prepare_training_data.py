@@ -1,13 +1,14 @@
 """SageMaker Processing script: assemble training data for the FinSense pipeline.
 
 Reads curated JSONL partitions (high-confidence model labels + pseudo-labels from the
-daily ingestion pipeline) and Financial PhraseBank, then writes channel-ready outputs
-for the downstream MLM and classifier training steps plus a held-out test split for
-independent evaluation.
+daily ingestion pipeline) and Financial PhraseBank (pre-uploaded to S3 and staged by
+the pipeline as a ProcessingInput), then writes channel-ready outputs for the downstream
+MLM and classifier training steps plus a held-out test split for independent evaluation.
 
 Processing I/O (set by the pipeline definition):
   Inputs:
-    /opt/ml/processing/input/curated/   curated/*.jsonl from the data bucket
+    /opt/ml/processing/input/curated/      curated/*.jsonl from the data bucket
+    /opt/ml/processing/input/phrasebank/   Sentences_75Agree.txt from s3://data-bucket/reference/phrasebank/
   Outputs:
     /opt/ml/processing/output/mlm_corpus/        unlabeled text for MLM pre-training
     /opt/ml/processing/output/phrasebank_train/  PhraseBank train split (original format)
@@ -20,46 +21,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import urllib.request
-import zipfile
 from pathlib import Path
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
 SENTIMENT_STR_TO_ID = {"negative": 0, "neutral": 1, "positive": 2}
-FINPHRASE_ZIP_URL = (
-    "https://huggingface.co/datasets/takala/financial_phrasebank/resolve/main/data/"
-    "FinancialPhraseBank-v1.0.zip?download=true"
-)
-
-
-def _safe_zip_extractall(zf: zipfile.ZipFile, extract_dir: Path) -> None:
-    """Extract a ZipFile while guarding against path-traversal entries."""
-    extract_dir_resolved = extract_dir.resolve()
-    for member in zf.infolist():
-        member_path = (extract_dir_resolved / member.filename).resolve()
-        if not member_path.is_relative_to(extract_dir_resolved):
-            raise ValueError(f"Unsafe ZIP member path rejected: {member.filename!r}")
-    zf.extractall(extract_dir)
-
-
-def _download_phrasebank(dest_dir: Path, subset: str = "Sentences_75Agree.txt") -> Path:
-    """Download and extract Financial PhraseBank; return path to the chosen subset file."""
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    zip_path = dest_dir / "FinancialPhraseBank-v1.0.zip"
-    extract_dir = dest_dir / "FinancialPhraseBank-v1.0"
-    if not zip_path.is_file():
-        print("Downloading Financial PhraseBank ...")
-        urllib.request.urlretrieve(FINPHRASE_ZIP_URL, str(zip_path))
-        print()
-    if not extract_dir.is_dir():
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            _safe_zip_extractall(zf, extract_dir)
-    inner = extract_dir / "FinancialPhraseBank-v1.0" / subset
-    if not inner.is_file():
-        raise FileNotFoundError(f"Expected {inner}")
-    return inner
 
 
 def _load_phrasebank(txt_path: Path) -> pd.DataFrame:
@@ -128,13 +95,19 @@ def main() -> None:
     args = parser.parse_args()
 
     input_curated = Path(os.environ.get("SM_CHANNEL_CURATED", "/opt/ml/processing/input/curated"))
+    input_phrasebank = Path(os.environ.get("SM_CHANNEL_PHRASEBANK", "/opt/ml/processing/input/phrasebank"))
     out_mlm = Path("/opt/ml/processing/output/mlm_corpus")
     out_pb_train = Path("/opt/ml/processing/output/phrasebank_train")
     out_pseudo = Path("/opt/ml/processing/output/pseudo_data")
     out_test = Path("/opt/ml/processing/output/test_data")
 
     # --- PhraseBank ---------------------------------------------------------
-    pb_txt = _download_phrasebank(Path("/tmp/phrasebank"), subset=args.phrasebank_subset)
+    pb_txt = input_phrasebank / args.phrasebank_subset
+    if not pb_txt.is_file():
+        raise FileNotFoundError(
+            f"PhraseBank file not found at {pb_txt}. Ensure it is uploaded to the data "
+            f"bucket under reference/phrasebank/ and staged as a ProcessingInput."
+        )
     df_pb = _load_phrasebank(pb_txt)
     print(f"PhraseBank rows: {len(df_pb)}")
 

@@ -193,6 +193,12 @@ variable "pseudo_label_lambda_memory_mb" {
   default     = 512
 }
 
+variable "phrasebank_path" {
+  type        = string
+  description = "Local path to the Financial PhraseBank Sentences_75Agree.txt file, uploaded to the data bucket under reference/phrasebank/."
+  default     = "../../data/FinancialPhraseBank-v1.0/FinancialPhraseBank-v1.0/Sentences_75Agree.txt"
+}
+
 # --- SageMaker training pipeline --------------------------------------------
 
 variable "pipeline_name" {

@@ -235,7 +235,7 @@ DataPrep (Processing)
 |------|---------|
 | [`sagemaker/pipeline/pipeline_definition.py`](sagemaker/pipeline/pipeline_definition.py) | Builds the `sagemaker.workflow.pipeline.Pipeline` object via the Python SDK. |
 | [`sagemaker/pipeline/build_pipeline.py`](sagemaker/pipeline/build_pipeline.py) | CLI helper to generate pipeline definition JSON (or upsert directly). |
-| [`sagemaker/pipeline/scripts/prepare_training_data.py`](sagemaker/pipeline/scripts/prepare_training_data.py) | Processing script: assembles curated data + PhraseBank, produces MLM corpus, classifier data, and held-out test split. |
+| [`sagemaker/pipeline/scripts/prepare_training_data.py`](sagemaker/pipeline/scripts/prepare_training_data.py) | Processing script: assembles curated data + PhraseBank (from S3 `reference/phrasebank/`), produces MLM corpus, classifier data, and held-out test split. |
 | [`sagemaker/pipeline/scripts/evaluate_classifier.py`](sagemaker/pipeline/scripts/evaluate_classifier.py) | Processing script: loads trained classifier, evaluates against the held-out test set, writes `evaluation.json`. |
 | [`sagemaker/pipeline/entry_points/run_mlm.py`](sagemaker/pipeline/entry_points/run_mlm.py) | Thin wrapper for `training.train_mlm:main` (resolves relative imports under SageMaker). |
 | [`sagemaker/pipeline/entry_points/run_classifier.py`](sagemaker/pipeline/entry_points/run_classifier.py) | Thin wrapper for `training.train_classifier:main`. |
@@ -276,6 +276,7 @@ aws sagemaker start-pipeline-execution \
 |-----------|---------|-------------|
 | `DataBucket` | session default | S3 bucket for intermediate pipeline artifacts. |
 | `CuratedS3Prefix` | `curated/` | S3 prefix for curated training data from the ingestion pipeline. |
+| `PhraseBankS3Prefix` | `reference/phrasebank/` | S3 prefix where `Sentences_75Agree.txt` is stored (uploaded by Terraform). |
 | `BaseModel` | `bert-base-uncased` | Hugging Face checkpoint for MLM + classifier. |
 | `TrainImageUri` | HF PyTorch training DLC | Training container image. |
 | `InferenceImageUri` | HF PyTorch inference DLC | Inference image used when registering the model package. |
@@ -296,6 +297,7 @@ aws sagemaker start-pipeline-execution \
 | `pipeline_definition_json` | `""` | Inline JSON (takes precedence over file). |
 | `pipeline_definition_path` | `pipeline_definition.json` | Path to the generated JSON file. |
 | `model_package_group_name` | `finsense-sentiment` | Model Package Group. |
+| `phrasebank_path` | `../../data/FinancialPhraseBank-v1.0/FinancialPhraseBank-v1.0/Sentences_75Agree.txt` | Local path to PhraseBank file, uploaded to the data bucket under `reference/phrasebank/`. |
 | `pipeline_macro_f1_threshold` | `0.80` | Threshold (for documentation; runtime value is a pipeline parameter). |
 
 ## 9. Updating the model

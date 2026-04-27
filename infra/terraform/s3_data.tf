@@ -96,3 +96,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
 
   depends_on = [aws_s3_bucket_versioning.data]
 }
+
+resource "aws_s3_object" "phrasebank" {
+  bucket                 = aws_s3_bucket.data.id
+  key                    = "reference/phrasebank/${basename(var.phrasebank_path)}"
+  source                 = abspath(var.phrasebank_path)
+  etag                   = filemd5(abspath(var.phrasebank_path))
+  server_side_encryption = "AES256"
+}

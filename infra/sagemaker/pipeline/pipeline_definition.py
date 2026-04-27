@@ -81,6 +81,10 @@ def build_pipeline(
         name="CuratedS3Prefix",
         default_value="curated/",
     )
+    param_phrasebank_s3_prefix = ParameterString(
+        name="PhraseBankS3Prefix",
+        default_value="reference/phrasebank/",
+    )
     param_base_model = ParameterString(
         name="BaseModel",
         default_value="bert-base-uncased",
@@ -141,6 +145,12 @@ def build_pipeline(
                 source=Join(on="", values=["s3://", param_data_bucket, "/", param_curated_prefix]),
                 input_name="curated",
                 destination="/opt/ml/processing/input/curated",
+                s3_data_distribution_type="FullyReplicated",
+            ),
+            ProcessingInput(
+                source=Join(on="", values=["s3://", param_data_bucket, "/", param_phrasebank_s3_prefix]),
+                input_name="phrasebank",
+                destination="/opt/ml/processing/input/phrasebank",
                 s3_data_distribution_type="FullyReplicated",
             ),
         ],
@@ -352,6 +362,7 @@ def build_pipeline(
         parameters=[
             param_data_bucket,
             param_curated_prefix,
+            param_phrasebank_s3_prefix,
             param_base_model,
             param_train_image,
             param_inference_image,
