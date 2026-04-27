@@ -42,6 +42,8 @@ infra/terraform/build/
 infra/terraform/terraform.tfvars
 infra/terraform/.terraform/
 infra/terraform/.terraform.lock.hcl
+infra/terraform/pipeline_definition.json
+
 # Terraform state and other local artifacts (never commit)
 *.tfstate
 *.tfstate.*
