@@ -2,8 +2,11 @@
 
 aws_region = "us-east-1"
 
-# Hugging Face DLC for your region (CPU example — verify current tag in AWS docs):
-# sagemaker_image_uri = "763104351234.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:2.5.1-transformers4.48.3-cpu-py311-ubuntu22.04"
+# Hugging Face DLC for your region — must use a Transformers 5.x image to match
+# the training stack (pyproject.toml requires transformers>=5.0.0,<6).
+# Verify current tags at: https://huggingface.co/docs/sagemaker/dlcs/available
+# CPU example:
+# sagemaker_image_uri = "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:2.6.0-transformers4.51.3-cpu-py312-ubuntu22.04"
 
 sagemaker_image_uri     = "REPLACE_WITH_REGION_SPECIFIC_HF_INFERENCE_DLC_URI"
 model_tarball_path      = "../../model.tar.gz"

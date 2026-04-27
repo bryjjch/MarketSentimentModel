@@ -11,10 +11,9 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
-from aggregate import aggregate_predictions
-from symbol import normalize_symbol
-from sources import collect_for_symbol
-from sources.base import CollectedItem
+from finsense_shared import aggregate_predictions, normalize_symbol
+from finsense_shared.sources import collect_for_symbol
+from finsense_shared.sources.base import CollectedItem
 
 ENDPOINT_NAME = os.environ["SAGEMAKER_ENDPOINT_NAME"]
 RECENT_HEADLINES_MAX = int(os.environ.get("RECENT_HEADLINES_MAX", "10"))
