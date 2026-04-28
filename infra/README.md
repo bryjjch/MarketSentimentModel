@@ -55,7 +55,33 @@ cd infra/terraform
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars: aws_region, sagemaker_image_uri, model_tarball_path
 
-terraform init
+# One-time remote state setup:
+cp backend.hcl.example backend.hcl
+# Edit backend.hcl: bucket, key, region, dynamodb_table
+
+# First time with remote state (or when switching from local state):
+terraform init -backend-config=backend.hcl -reconfigure -migrate-state
+terraform apply
+```
+
+To bootstrap the backend storage itself, create the S3 bucket and lock table once (outside this stack), then keep reusing them:
+
+```bash
+aws s3api create-bucket --bucket <state-bucket-name> --region us-east-1
+aws s3api put-bucket-versioning --bucket <state-bucket-name> --versioning-configuration Status=Enabled
+aws dynamodb create-table \
+  --table-name <lock-table-name> \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+```
+
+After bootstrapping, day-to-day commands from any computer are:
+
+```bash
+cd infra/terraform
+terraform init -backend-config=backend.hcl
+terraform plan
 terraform apply
 ```
 
