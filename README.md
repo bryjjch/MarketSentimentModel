@@ -1,19 +1,33 @@
 # FinSense
 
-Training code for financial **three-class sentiment** (negative, neutral, positive) using Hugging Face **Transformers** and PyTorch. You can fine-tune **BERT**-family checkpoints (including **FinBERT**), optionally continue pre-training with **masked language modeling (MLM)** on your own text, and optionally mix in **LLM pseudo-labeled** data.
+FinSense is a **financial three-class sentiment** stack (negative, neutral, positive): a Python **training** package (Hugging Face Transformers and PyTorch), optional **AWS** deployment (SageMaker, API Gateway, Lambdas, daily ingestion and pseudo-labeling), a **SageMaker Pipeline** definition for end-to-end retraining, and a small **Vite + React** reference UI that reads cached scores from the HTTP API.
+
+## What is in this repository
+
+| Area | Role |
+|------|------|
+| **`src/training/`** | Fine-tune BERT-family models (including FinBERT), optional MLM continued pre-training, LLM pseudo-labeling, classifier training, inference helpers, metrics, and run manifests. |
+| **`infra/`** | Terraform (S3, SageMaker serverless inference, HTTP API, Lambdas, DynamoDB, EventBridge), SageMaker serving code, Lambda shared layer, and the SageMaker training pipeline SDK code. **Details:** [`infra/README.md`](infra/README.md). |
+| **`web/`** | Optional dashboard: browse DynamoDB-backed sentiment cache against your deployed API base URL (`VITE_API_BASE_URL`). |
+| **`notebooks/`** | Exploratory notebook aligned with the training pipeline. |
+| **`tests/`** | Pytest suite (training, artifacts, inference, Lambdas, ingestion, evaluation, etc.). |
 
 ## Requirements
 
 - **Python** 3.10 or newer  
 - **GPU** recommended for classifier and MLM training (CPU is possible but slow)  
 - **Transformers 5.x** expects a recent **PyTorch** (2.4+).
-- Dependencies are declared in `pyproject.toml` (PyTorch, Transformers, Datasets, scikit-learn, pandas, etc.)
+- Dependencies are declared in `pyproject.toml` (PyTorch, Transformers, Datasets, scikit-learn, pandas, OpenAI / Google GenAI clients, etc.)
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
 | `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, **inference**, metrics, run manifests |
+| `infra/terraform/` | AWS resources (models + data buckets, SageMaker model/endpoint, API routes, Lambdas, layers, DynamoDB, EventBridge, pipeline definition hook) |
+| `infra/sagemaker/` | SageMaker **serving** handler and **training pipeline** (build script, processing scripts, training entry points) |
+| `infra/lambda/` | Lambda handlers (predict, sentiment by symbol, cache read, ingestion, prediction, pseudo-label) and shared `finsense_shared` code layer |
+| `web/` | React + TypeScript + Vite UI for cache list / heatmap (configure API base URL via env; see `web/.env.example`) |
 | `notebooks/bert_text_classification.ipynb` | Exploratory / teaching notebook aligned with the pipeline |
 | `data/` | Default download location for Financial PhraseBank (created on first use) |
 | `tests/` | Pytest suite |
@@ -21,7 +35,7 @@ Training code for financial **three-class sentiment** (negative, neutral, positi
 | `requirements/pinned-train.txt` | Pinned versions for reproducible train + dev environments |
 | `requirements/pinned-serve.txt` | Minimal pins for inference-only images |
 
-## Installation
+## Installation (training package)
 
 From the repository root:
 
@@ -35,7 +49,7 @@ Or equivalently:
 pip install -e .
 ```
 
-For optional dev dependencies (pytest):
+For optional dev dependencies (pytest; **boto3** is included for tests that exercise AWS-related helpers):
 
 ```bash
 pip install -e ".[dev]"
@@ -46,6 +60,30 @@ Install a CUDA-enabled **PyTorch** build from [pytorch.org](https://pytorch.org/
 ### Reproducible / pinned environments
 
 For Docker, SageMaker, or CI, install the exact library set from `requirements/pinned-train.txt` (after installing a matching **torch** wheel for your CUDA/CPU target). For inference-only containers, use `requirements/pinned-serve.txt`.
+
+## Cloud deployment and pipelines
+
+Provisioning (S3, SageMaker endpoint, HTTP API, Lambdas, daily ingestion → prediction → pseudo-label flow, DynamoDB cache, SageMaker training pipeline resource) is documented in **`infra/README.md`**, including:
+
+- How to obtain and point Terraform at `model.tar.gz` from `finsense-train-classifier`
+- API routes (`POST /predict`, `POST /sentiment/by-symbol`, `GET /sentiment/cache`, `GET /sentiment/cache/{symbol}`)
+- Data layout under the data bucket (`raw/`, `predictions/`, `pseudo/`, `curated/`)
+- Building and starting the SageMaker training pipeline
+
+Lambda dependency layer setup and `terraform apply` live there as well.
+
+## Web dashboard (optional)
+
+From `web/`:
+
+```bash
+npm install
+cp .env.example .env.local
+# Set VITE_API_BASE_URL to your HTTP API invoke URL (see infra README / terraform outputs)
+npm run dev
+```
+
+The app calls the deployed API (e.g. cached sentiment list and per-symbol cache). It does not run the training stack locally.
 
 ## Label convention
 
