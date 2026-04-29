@@ -1,16 +1,16 @@
-resource "aws_iam_role" "prediction_lambda" {
-  name               = "${var.project_name}-prediction-lambda"
+resource "aws_iam_role" "ingestion_prediction_lambda" {
+  name               = "${var.project_name}-ingestion-prediction-lambda"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
-resource "aws_iam_role_policy_attachment" "prediction_lambda_basic" {
-  role       = aws_iam_role.prediction_lambda.name
+resource "aws_iam_role_policy_attachment" "ingestion_prediction_lambda_basic" {
+  role       = aws_iam_role.ingestion_prediction_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy" "prediction_lambda" {
-  name = "${var.project_name}-prediction-perms"
-  role = aws_iam_role.prediction_lambda.id
+resource "aws_iam_role_policy" "ingestion_prediction_lambda" {
+  name = "${var.project_name}-ingestion-prediction-perms"
+  role = aws_iam_role.ingestion_prediction_lambda.id
 
   policy = jsonencode({
     Version = "2012-10-17"

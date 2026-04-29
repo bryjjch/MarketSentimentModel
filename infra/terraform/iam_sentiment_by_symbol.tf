@@ -1,16 +1,16 @@
-resource "aws_iam_role" "sentiment_lambda" {
-  name               = "${var.project_name}-sentiment-lambda"
+resource "aws_iam_role" "api_sentiment_by_symbol_lambda" {
+  name               = "${var.project_name}-api-sentiment-by-symbol-lambda"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
-resource "aws_iam_role_policy_attachment" "sentiment_lambda_basic" {
-  role       = aws_iam_role.sentiment_lambda.name
+resource "aws_iam_role_policy_attachment" "api_sentiment_by_symbol_lambda_basic" {
+  role       = aws_iam_role.api_sentiment_by_symbol_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy" "sentiment_lambda_invoke" {
-  name = "${var.project_name}-sentiment-invoke-sm"
-  role = aws_iam_role.sentiment_lambda.id
+resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_invoke" {
+  name = "${var.project_name}-api-sentiment-by-symbol-invoke-sm"
+  role = aws_iam_role.api_sentiment_by_symbol_lambda.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -25,10 +25,10 @@ resource "aws_iam_role_policy" "sentiment_lambda_invoke" {
   })
 }
 
-resource "aws_iam_role_policy" "sentiment_lambda_secrets" {
+resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_secrets" {
   count = var.reddit_credentials_secret_arn != "" ? 1 : 0
-  name  = "${var.project_name}-sentiment-read-reddit-secret"
-  role  = aws_iam_role.sentiment_lambda.id
+  name  = "${var.project_name}-api-sentiment-by-symbol-read-reddit-secret"
+  role  = aws_iam_role.api_sentiment_by_symbol_lambda.id
 
   policy = jsonencode({
     Version = "2012-10-17"
