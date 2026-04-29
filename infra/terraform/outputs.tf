@@ -57,9 +57,9 @@ output "ingestion_function_name" {
   value       = aws_lambda_function.ingestion.function_name
 }
 
-output "prediction_function_name" {
-  description = "Prediction Lambda invoked per-ticker by the ingestion fan-out."
-  value       = aws_lambda_function.prediction.function_name
+output "ingestion_prediction_function_name" {
+  description = "Ingestion-prediction Lambda invoked per-ticker by the ingestion fan-out."
+  value       = aws_lambda_function.ingestion_prediction.function_name
 }
 
 output "pseudo_label_function_name" {

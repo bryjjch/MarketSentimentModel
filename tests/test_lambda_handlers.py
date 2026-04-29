@@ -130,7 +130,7 @@ def test_prediction_lambda_splits_high_and_low_confidence(
     monkeypatch.setattr(boto3, "client", boto_client)
     monkeypatch.setattr(boto3, "resource", lambda name, **kwargs: fake_ddb)
 
-    # Seed a raw partition for the prediction Lambda to read.
+    # Seed a raw partition for the ingestion-prediction Lambda to read.
     rows = [
         {"text": "EPS beat expectations", "title": "Beat", "url": "http://a", "source_type": "news_rss"},
         {"text": "Outlook unclear mixed", "title": "Mix", "url": "http://b", "source_type": "news_rss"},
@@ -151,7 +151,7 @@ def test_prediction_lambda_splits_high_and_low_confidence(
             "CACHE_TABLE_NAME": "test-cache",
             "LOW_CONF_TOP_PROB": "0.65",
         },
-        "prediction",
+        "ingestion_prediction",
     )
 
     result = handler.lambda_handler(

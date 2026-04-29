@@ -1,18 +1,18 @@
-data "archive_file" "prediction_lambda" {
+data "archive_file" "ingestion_prediction_lambda" {
   type        = "zip"
-  source_dir  = abspath("${path.module}/../lambda/prediction")
-  output_path = "${path.module}/build/prediction.zip"
+  source_dir  = abspath("${path.module}/../lambda/ingestion_prediction")
+  output_path = "${path.module}/build/ingestion_prediction.zip"
   excludes    = ["__pycache__", "*.pyc", ".pytest_cache"]
 }
 
-resource "aws_lambda_function" "prediction" {
-  function_name = "${var.project_name}-prediction"
-  role          = aws_iam_role.prediction_lambda.arn
+resource "aws_lambda_function" "ingestion_prediction" {
+  function_name = "${var.project_name}-ingestion-prediction"
+  role          = aws_iam_role.ingestion_prediction_lambda.arn
   handler       = "handler.lambda_handler"
   runtime       = "python3.12"
 
-  filename         = data.archive_file.prediction_lambda.output_path
-  source_code_hash = data.archive_file.prediction_lambda.output_base64sha256
+  filename         = data.archive_file.ingestion_prediction_lambda.output_path
+  source_code_hash = data.archive_file.ingestion_prediction_lambda.output_base64sha256
 
   layers = [
     aws_lambda_layer_version.finsense_shared.arn,
@@ -37,8 +37,8 @@ resource "aws_lambda_function" "prediction" {
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.prediction_lambda_basic,
-    aws_iam_role_policy.prediction_lambda,
+    aws_iam_role_policy_attachment.ingestion_prediction_lambda_basic,
+    aws_iam_role_policy.ingestion_prediction_lambda,
     aws_s3_bucket.data,
     aws_sagemaker_endpoint.classifier,
     aws_lambda_function.pseudo_label,

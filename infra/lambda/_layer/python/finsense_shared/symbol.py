@@ -1,4 +1,4 @@
-"""Ticker symbol normalization (kept in sync with ``infra/lambda/sentiment/symbol.py``)."""
+"""Ticker symbol normalization."""
 
 from __future__ import annotations
 

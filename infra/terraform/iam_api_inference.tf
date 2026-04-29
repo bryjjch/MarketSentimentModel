@@ -8,17 +8,17 @@ data "aws_iam_policy_document" "lambda_assume" {
   }
 }
 
-resource "aws_iam_role" "predict_lambda" {
-  name               = "${var.project_name}-predict-lambda"
+resource "aws_iam_role" "api_inference_lambda" {
+  name               = "${var.project_name}-api-inference-lambda"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
-resource "aws_iam_role_policy_attachment" "predict_lambda_basic" {
-  role       = aws_iam_role.predict_lambda.name
+resource "aws_iam_role_policy_attachment" "api_inference_lambda_basic" {
+  role       = aws_iam_role.api_inference_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-data "aws_iam_policy_document" "predict_lambda_invoke" {
+data "aws_iam_policy_document" "api_inference_lambda_invoke" {
   statement {
     sid       = "InvokeSageMakerEndpoint"
     actions   = ["sagemaker:InvokeEndpoint"]
@@ -26,8 +26,8 @@ data "aws_iam_policy_document" "predict_lambda_invoke" {
   }
 }
 
-resource "aws_iam_role_policy" "predict_lambda_invoke" {
+resource "aws_iam_role_policy" "api_inference_lambda_invoke" {
   name   = "${var.project_name}-invoke-endpoint"
-  role   = aws_iam_role.predict_lambda.id
-  policy = data.aws_iam_policy_document.predict_lambda_invoke.json
+  role   = aws_iam_role.api_inference_lambda.id
+  policy = data.aws_iam_policy_document.api_inference_lambda_invoke.json
 }

@@ -33,7 +33,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 DATA_BUCKET = os.environ["DATA_BUCKET"]
-PREDICTION_FUNCTION_NAME = os.environ.get("PREDICTION_FUNCTION_NAME", "").strip()
+INGESTION_PREDICTION_FUNCTION_NAME = os.environ.get("INGESTION_PREDICTION_FUNCTION_NAME", "").strip()
 DEFAULT_MAX_ARTICLES = int(os.environ.get("DEFAULT_MAX_ARTICLES", "20"))
 INCLUDE_SOCIAL = os.environ.get("INCLUDE_SOCIAL", "true").lower() not in ("0", "false", "no")
 
@@ -98,7 +98,7 @@ def _ingest_symbol(symbol: str, run_id: str, max_articles: int, include_social: 
 
 def _fan_out_to_prediction(payloads: list[dict[str, Any]]) -> dict[str, int]:
     """Async-invoke the prediction Lambda per ticker. Returns ok/failed counts."""
-    if not PREDICTION_FUNCTION_NAME:
+    if not INGESTION_PREDICTION_FUNCTION_NAME:
         return {"dispatched": 0, "failed": 0}
     ok = 0
     failed = 0
@@ -107,7 +107,7 @@ def _fan_out_to_prediction(payloads: list[dict[str, Any]]) -> dict[str, int]:
             continue
         try:
             _lambda.invoke(
-                FunctionName=PREDICTION_FUNCTION_NAME,
+                FunctionName=INGESTION_PREDICTION_FUNCTION_NAME,
                 InvocationType="Event",
                 Payload=json.dumps(p).encode("utf-8"),
             )

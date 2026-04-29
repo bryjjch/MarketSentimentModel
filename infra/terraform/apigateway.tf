@@ -11,18 +11,18 @@ resource "aws_apigatewayv2_api" "http" {
   }
 }
 
-resource "aws_apigatewayv2_integration" "predict" {
-  api_id             = aws_apigatewayv2_api.http.id
-  integration_type   = "AWS_PROXY"
-  integration_uri    = aws_lambda_function.predict.invoke_arn
-  integration_method = "POST"
+resource "aws_apigatewayv2_integration" "api_inference" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.api_inference.invoke_arn
+  integration_method     = "POST"
   payload_format_version = "2.0"
 }
 
 resource "aws_apigatewayv2_route" "post_predict" {
   api_id    = aws_apigatewayv2_api.http.id
   route_key = "POST /predict"
-  target    = "integrations/${aws_apigatewayv2_integration.predict.id}"
+  target    = "integrations/${aws_apigatewayv2_integration.api_inference.id}"
 }
 
 resource "aws_apigatewayv2_stage" "default" {
@@ -36,10 +36,10 @@ resource "aws_apigatewayv2_stage" "default" {
   }
 }
 
-resource "aws_lambda_permission" "apigw_invoke" {
+resource "aws_lambda_permission" "apigw_invoke_api_inference" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.predict.function_name
+  function_name = aws_lambda_function.api_inference.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
 }

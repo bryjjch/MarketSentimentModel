@@ -24,13 +24,13 @@ resource "aws_lambda_function" "ingestion" {
 
   environment {
     variables = {
-      DATA_BUCKET              = aws_s3_bucket.data.bucket
-      PREDICTION_FUNCTION_NAME = aws_lambda_function.prediction.function_name
-      DEFAULT_MAX_ARTICLES     = tostring(var.ingestion_max_articles)
-      INCLUDE_SOCIAL           = var.ingestion_include_social ? "true" : "false"
-      TOP_TICKERS_SSM_PARAM    = aws_ssm_parameter.top_tickers.name
-      DEFAULT_TICKERS_JSON     = var.top_tickers_json
-      REDDIT_SECRET_ARN        = var.reddit_credentials_secret_arn
+      DATA_BUCKET                        = aws_s3_bucket.data.bucket
+      INGESTION_PREDICTION_FUNCTION_NAME = aws_lambda_function.ingestion_prediction.function_name
+      DEFAULT_MAX_ARTICLES               = tostring(var.ingestion_max_articles)
+      INCLUDE_SOCIAL                     = var.ingestion_include_social ? "true" : "false"
+      TOP_TICKERS_SSM_PARAM              = aws_ssm_parameter.top_tickers.name
+      DEFAULT_TICKERS_JSON               = var.top_tickers_json
+      REDDIT_SECRET_ARN                  = var.reddit_credentials_secret_arn
     }
   }
 
@@ -38,7 +38,7 @@ resource "aws_lambda_function" "ingestion" {
     aws_iam_role_policy_attachment.ingestion_lambda_basic,
     aws_iam_role_policy.ingestion_lambda,
     aws_s3_bucket.data,
-    aws_lambda_function.prediction,
+    aws_lambda_function.ingestion_prediction,
     aws_ssm_parameter.top_tickers,
   ]
 }

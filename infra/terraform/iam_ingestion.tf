@@ -35,7 +35,7 @@ resource "aws_iam_role_policy" "ingestion_lambda" {
           Sid      = "InvokePredictionLambda"
           Effect   = "Allow"
           Action   = ["lambda:InvokeFunction"]
-          Resource = aws_lambda_function.prediction.arn
+          Resource = aws_lambda_function.ingestion_prediction.arn
         },
         {
           Sid      = "ReadTickerParam"
