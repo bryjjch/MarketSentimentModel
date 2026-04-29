@@ -43,6 +43,14 @@ For optional dev dependencies (pytest; **boto3** is included for tests that exer
 pip install -e ".[dev]"
 ```
 
+To generate `infra/terraform/pipeline_definition.json` locally, install the **SageMaker SDK v2** pin (see `requirements/pinned-pipeline.txt`):
+
+```bash
+pip install -r requirements/pinned-pipeline.txt
+```
+
+or `pip install -e ".[pipeline]"`.
+
 ## Cloud deployment and pipelines
 
 Provisioning (S3, SageMaker endpoint, HTTP API, Lambdas, daily ingestion → prediction → pseudo-label flow, DynamoDB cache, SageMaker training pipeline resource) is documented in **`infra/README.md`**, including:

@@ -275,7 +275,14 @@ DataPrep (Processing)
 
 ### Build and deploy the pipeline
 
-1. Generate the pipeline definition JSON from the Python SDK:
+1. Install pipeline build dependencies (SageMaker Python SDK **v2**; v3 is incompatible with this code path):
+
+```bash
+cd <repo-root>
+pip install -r requirements/pinned-pipeline.txt
+```
+
+2. Generate the pipeline definition JSON from the Python SDK:
 
 ```bash
 cd <repo-root>
@@ -285,14 +292,14 @@ python -m infra.sagemaker.pipeline.build_pipeline \
     --output infra/terraform/pipeline_definition.json
 ```
 
-2. Deploy with Terraform:
+3. Deploy with Terraform:
 
 ```bash
 cd infra/terraform
 terraform apply   # picks up pipeline_definition.json automatically
 ```
 
-3. Start a pipeline execution (AWS CLI):
+4. Start a pipeline execution (AWS CLI):
 
 ```bash
 aws sagemaker start-pipeline-execution \

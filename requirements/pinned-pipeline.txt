@@ -1,0 +1,11 @@
+# Pin SageMaker Python SDK to v2.x for local pipeline JSON generation.
+# v3+ splits/removes the legacy `sagemaker.workflow.*` API used by
+# `infra/sagemaker/pipeline/build_pipeline.py` and `pipeline_definition.py`.
+#
+# Install (from repo root, ideally Python 3.10–3.12):
+#   pip install -r requirements/pinned-pipeline.txt
+#
+# Or: pip install -e ".[pipeline]"
+
+sagemaker>=2.200,<3
+boto3>=1.28.0
