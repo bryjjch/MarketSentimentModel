@@ -23,6 +23,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "boto3>=1.28.0"]
+# Local build of pipeline_definition.json (sagemaker.workflow.*); use SDK v2 only.
+pipeline = ["sagemaker>=2.200,<3", "boto3>=1.28.0"]
 
 [project.scripts]
 finsense-pseudo-label = "training.pseudo_label:main"

@@ -6,3 +6,7 @@
 
 # Optional: reproducible library pins for Docker / CI / SageMaker images
 # pip install -r requirements/pinned-train.txt
+#
+# Optional: generate infra/terraform/pipeline_definition.json (SageMaker SDK v2)
+# pip install -r requirements/pinned-pipeline.txt
+#   or: pip install -e ".[pipeline]"
