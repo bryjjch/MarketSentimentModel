@@ -91,6 +91,12 @@ variable "sentiment_cache_ttl_seconds" {
   default     = 604800
 }
 
+variable "sentiment_cache_api_ttl_seconds" {
+  type        = number
+  description = "Unix seconds added to API by-symbol write-back time for DynamoDB expires_at."
+  default     = 86400
+}
+
 variable "top_tickers_json" {
   type        = string
   description = "JSON array of tickers stored in SSM at /{project_name}/top-tickers for the ingestion Lambda."

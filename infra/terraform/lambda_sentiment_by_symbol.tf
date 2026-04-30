@@ -27,12 +27,16 @@ resource "aws_lambda_function" "api_sentiment_by_symbol" {
       REDDIT_SECRET_ARN       = var.reddit_credentials_secret_arn
       RECENT_HEADLINES_MAX    = "10"
       DEFAULT_MAX_ARTICLES    = "12"
+      CACHE_TABLE_NAME        = aws_dynamodb_table.sentiment_cache.name
+      CACHE_TTL_SECONDS       = tostring(var.sentiment_cache_api_ttl_seconds)
     }
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.api_sentiment_by_symbol_lambda_basic,
     aws_iam_role_policy.api_sentiment_by_symbol_lambda_invoke,
+    aws_iam_role_policy.api_sentiment_by_symbol_lambda_cache_write,
+    aws_dynamodb_table.sentiment_cache,
     aws_sagemaker_endpoint.classifier,
   ]
 }

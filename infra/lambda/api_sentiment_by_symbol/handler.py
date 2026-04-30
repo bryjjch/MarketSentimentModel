@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import time
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import boto3
@@ -18,9 +20,52 @@ from finsense_shared.sources.base import CollectedItem
 ENDPOINT_NAME = os.environ["SAGEMAKER_ENDPOINT_NAME"]
 RECENT_HEADLINES_MAX = int(os.environ.get("RECENT_HEADLINES_MAX", "10"))
 DEFAULT_MAX_ARTICLES = int(os.environ.get("DEFAULT_MAX_ARTICLES", "12"))
+CACHE_TABLE_NAME = os.environ.get("CACHE_TABLE_NAME", "").strip()
+CACHE_TTL_SECONDS = int(os.environ.get("CACHE_TTL_SECONDS", "604800"))
 
 _runtime = boto3.client("sagemaker-runtime")
+_ddb = boto3.resource("dynamodb") if CACHE_TABLE_NAME else None
 _JSON_HEADERS = {"Content-Type": "application/json"}
+logger = logging.getLogger()
+
+
+def _to_ddb_number(value: Any, default: str = "0") -> Decimal:
+    """Convert numeric-like values to Decimal for DynamoDB writes."""
+    try:
+        d = Decimal(str(value))
+        if d.is_nan() or d.is_infinite():
+            return Decimal(default)
+        return d
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(default)
+
+
+def _write_cache_row(
+    symbol: str,
+    score: float,
+    label: str,
+    article_count: int,
+    recent_headlines: list[dict[str, str]],
+) -> None:
+    """Best-effort cache write so long-tail symbols are reused by cache reads."""
+    if not CACHE_TABLE_NAME or _ddb is None:
+        return
+    try:
+        table = _ddb.Table(CACHE_TABLE_NAME)
+        now = int(time.time())
+        table.put_item(
+            Item={
+                "symbol": symbol,
+                "score": _to_ddb_number(score),
+                "label": label,
+                "article_count": int(article_count),
+                "recent_headlines": recent_headlines,
+                "updated_at": now,
+                "expires_at": now + CACHE_TTL_SECONDS,
+            }
+        )
+    except ClientError as e:
+        logger.exception("ddb_put_failed %s: %s", symbol, e)
 
 
 def _response(status: int, body: dict[str, Any]) -> dict[str, Any]:
@@ -132,7 +177,7 @@ def run_sentiment(symbol: str, options: dict[str, Any] | None) -> dict[str, Any]
             src_counts[it.source_type] = src_counts.get(it.source_type, 0) + 1
 
     now = int(time.time())
-    return {
+    out = {
         "symbol": symbol,
         "score": round(score, 6),
         "label": label,
@@ -141,6 +186,14 @@ def run_sentiment(symbol: str, options: dict[str, Any] | None) -> dict[str, Any]
         "sources": src_counts,
         "updated_at": now,
     }
+    _write_cache_row(
+        symbol=symbol,
+        score=out["score"],
+        label=label,
+        article_count=analyzed,
+        recent_headlines=headlines,
+    )
+    return out
 
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
