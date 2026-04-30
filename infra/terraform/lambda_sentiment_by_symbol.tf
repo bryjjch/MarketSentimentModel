@@ -28,7 +28,7 @@ resource "aws_lambda_function" "api_sentiment_by_symbol" {
       RECENT_HEADLINES_MAX    = "10"
       DEFAULT_MAX_ARTICLES    = "12"
       CACHE_TABLE_NAME        = aws_dynamodb_table.sentiment_cache.name
-      CACHE_TTL_SECONDS       = tostring(var.sentiment_cache_ttl_seconds)
+      CACHE_TTL_SECONDS       = tostring(var.sentiment_cache_api_ttl_seconds)
     }
   }
 
