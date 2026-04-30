@@ -70,6 +70,23 @@ class FakeLambda:
         return {"StatusCode": 202, "Payload": io.BytesIO(b"")}
 
 
+class FakeSageMakerRuntimeForApi:
+    """Simple API runtime stub that returns one positive record per text."""
+
+    def invoke_endpoint(self, *, EndpointName: str, ContentType: str, Accept: str, Body: bytes) -> dict[str, Any]:
+        payload = json.loads(Body.decode("utf-8"))
+        texts = payload.get("texts", [])
+        records = [
+            {
+                "label_id": 2,
+                "label_name": "positive",
+                "probabilities": {"negative": 0.05, "neutral": 0.1, "positive": 0.85},
+            }
+            for _ in texts
+        ]
+        return {"Body": io.BytesIO(json.dumps(records).encode("utf-8"))}
+
+
 class FakeDDBTable:
     def __init__(self) -> None:
         self.items: list[dict[str, Any]] = []
@@ -227,3 +244,108 @@ def test_pseudo_label_lambda_echo_provider_writes_pseudo_and_curated(
     curated = [json.loads(line) for line in curated_body.decode("utf-8").splitlines() if line.strip()]
     assert curated[0]["source"] == "pseudo"
     assert curated[0]["pseudo_provider"] == "echo"
+
+
+def test_api_sentiment_by_symbol_success_writes_cache_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    import boto3
+    from finsense_shared.sources.base import CollectedItem
+
+    fake_runtime = FakeSageMakerRuntimeForApi()
+    fake_ddb = FakeDDBResource()
+
+    def boto_client(name: str, **kwargs: Any) -> Any:
+        if name == "sagemaker-runtime":
+            return fake_runtime
+        raise AssertionError(f"unexpected boto3.client({name})")
+
+    def boto_resource(name: str, **kwargs: Any) -> Any:
+        if name == "dynamodb":
+            return fake_ddb
+        raise AssertionError(f"unexpected boto3.resource({name})")
+
+    monkeypatch.setattr(boto3, "client", boto_client)
+    monkeypatch.setattr(boto3, "resource", boto_resource)
+
+    handler = _reload_handler(
+        {
+            "AWS_DEFAULT_REGION": "us-east-1",
+            "SAGEMAKER_ENDPOINT_NAME": "test-endpoint",
+            "CACHE_TABLE_NAME": "test-cache",
+            "CACHE_TTL_SECONDS": "600",
+        },
+        "api_sentiment_by_symbol",
+    )
+    monkeypatch.setattr(
+        handler,
+        "collect_for_symbol",
+        lambda symbol, max_articles, include_social: [
+            CollectedItem(
+                title="Strong quarter",
+                url="http://example.com/news",
+                text="Company raised guidance and beat revenue.",
+                source_type="news_rss",
+            )
+        ],
+    )
+
+    out = handler.run_sentiment("AAPL", {"max_articles": 5, "include_social": False})
+    assert out.get("error") is None
+    assert out["symbol"] == "AAPL"
+    assert fake_ddb.table_obj.items, "expected a cache row"
+    row = fake_ddb.table_obj.items[0]
+    assert row["symbol"] == "AAPL"
+    assert row["label"] == out["label"]
+    assert int(row["article_count"]) == out["article_count"]
+    assert int(row["expires_at"]) > int(row["updated_at"])
+
+
+def test_api_sentiment_by_symbol_error_does_not_write_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    import boto3
+    from finsense_shared.sources.base import CollectedItem
+
+    fake_ddb = FakeDDBResource()
+
+    class InvalidShapeRuntime:
+        def invoke_endpoint(
+            self, *, EndpointName: str, ContentType: str, Accept: str, Body: bytes
+        ) -> dict[str, Any]:
+            return {"Body": io.BytesIO(json.dumps({"unexpected": "shape"}).encode("utf-8"))}
+
+    def boto_client(name: str, **kwargs: Any) -> Any:
+        if name == "sagemaker-runtime":
+            return InvalidShapeRuntime()
+        raise AssertionError(f"unexpected boto3.client({name})")
+
+    def boto_resource(name: str, **kwargs: Any) -> Any:
+        if name == "dynamodb":
+            return fake_ddb
+        raise AssertionError(f"unexpected boto3.resource({name})")
+
+    monkeypatch.setattr(boto3, "client", boto_client)
+    monkeypatch.setattr(boto3, "resource", boto_resource)
+
+    handler = _reload_handler(
+        {
+            "AWS_DEFAULT_REGION": "us-east-1",
+            "SAGEMAKER_ENDPOINT_NAME": "test-endpoint",
+            "CACHE_TABLE_NAME": "test-cache",
+            "CACHE_TTL_SECONDS": "600",
+        },
+        "api_sentiment_by_symbol",
+    )
+    monkeypatch.setattr(
+        handler,
+        "collect_for_symbol",
+        lambda symbol, max_articles, include_social: [
+            CollectedItem(
+                title="Mixed outlook",
+                url="http://example.com/mixed",
+                text="Outlook is uncertain this quarter.",
+                source_type="news_rss",
+            )
+        ],
+    )
+
+    out = handler.run_sentiment("AAPL", {"max_articles": 5, "include_social": False})
+    assert out["error"] == "invalid_sagemaker_shape"
+    assert fake_ddb.table_obj.items == []

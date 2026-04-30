@@ -25,6 +25,23 @@ resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_invoke" {
   })
 }
 
+resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_cache_write" {
+  name = "${var.project_name}-api-sentiment-by-symbol-cache-write"
+  role = aws_iam_role.api_sentiment_by_symbol_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "WriteSentimentCache"
+        Effect   = "Allow"
+        Action   = ["dynamodb:PutItem"]
+        Resource = aws_dynamodb_table.sentiment_cache.arn
+      },
+    ]
+  })
+}
+
 resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_secrets" {
   count = var.reddit_credentials_secret_arn != "" ? 1 : 0
   name  = "${var.project_name}-api-sentiment-by-symbol-read-reddit-secret"
