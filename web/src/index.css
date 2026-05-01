@@ -1,9 +1,175 @@
 @import 'tailwindcss';
 
+@theme {
+  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
 body {
   margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #030303;
+  color: #fafafa;
+  background-image:
+    radial-gradient(ellipse 100% 80% at 50% -30%, rgb(255 255 255 / 0.06), transparent 55%),
+    linear-gradient(rgb(255 255 255 / 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.02) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    48px 48px,
+    48px 48px;
+  background-attachment: fixed;
 }
 
 #root {
   min-height: 100svh;
+}
+
+/* --- FinSense motion (see components for class usage) --- */
+
+@keyframes fs-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fs-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fs-result-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fs-headline-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fs-modal-backdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fs-modal-dialog {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fs-loader-dots {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.fs-rise {
+  animation: fs-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fs-rise-delay-1 {
+  animation-delay: 70ms;
+}
+.fs-rise-delay-2 {
+  animation-delay: 140ms;
+}
+.fs-rise-delay-3 {
+  animation-delay: 210ms;
+}
+.fs-rise-delay-4 {
+  animation-delay: 280ms;
+}
+
+.fs-tile-in {
+  animation: fs-tile-in 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--fs-stagger, 0ms);
+}
+
+.fs-result-reveal {
+  animation: fs-result-reveal 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fs-headline-item {
+  animation: fs-headline-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--fs-hl-stagger, 0ms);
+}
+
+.fs-modal-backdrop {
+  animation: fs-modal-backdrop 0.3s ease-out both;
+}
+
+.fs-modal-dialog {
+  animation: fs-modal-dialog 0.45s cubic-bezier(0.22, 1, 0.36, 1) 45ms both;
+}
+
+.fs-loader-dot {
+  animation: fs-loader-dots 1s ease-in-out infinite;
+}
+
+.fs-loader-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.fs-loader-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fs-rise,
+  .fs-tile-in,
+  .fs-result-reveal,
+  .fs-headline-item,
+  .fs-modal-backdrop,
+  .fs-modal-dialog,
+  .fs-loader-dot {
+    animation: none !important;
+    animation-delay: 0s !important;
+  }
+
+  .fs-loader-dot {
+    opacity: 0.6;
+    transform: none;
+  }
 }
