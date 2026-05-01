@@ -1,4 +1,10 @@
-import type { FormEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { formatScore } from '../formatScore'
 import { scoreToCardStyle } from '../scoreColor'
 import type { SentimentRow } from '../types'
@@ -10,8 +16,12 @@ type Props = {
   query: string
   onQueryChange: (q: string) => void
   onSubmit: (e: FormEvent) => void
+  onSuggestionRequest: (q: string) => void
+  onSuggestionSelect: (symbol: string) => void
   searchError: string | null
   searchLoading: boolean
+  suggestionLoading: boolean
+  suggestions: string[]
   searchResult: SentimentRow | null
   searchSource: SearchResultContext
   onAddToHeatmap: () => void
@@ -29,12 +39,69 @@ export function SearchPanel({
   query,
   onQueryChange,
   onSubmit,
+  onSuggestionRequest,
+  onSuggestionSelect,
   searchError,
   searchLoading,
+  suggestionLoading,
+  suggestions,
   searchResult,
   searchSource,
   onAddToHeatmap,
 }: Props) {
+  const [isInputFocused, setInputFocused] = useState(false)
+  const [activeSuggestion, setActiveSuggestion] = useState(-1)
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      const normalized = query.trim().toUpperCase()
+      if (normalized.length < 2) {
+        onSuggestionRequest('')
+        return
+      }
+      onSuggestionRequest(normalized)
+    }, 180)
+    return () => window.clearTimeout(handle)
+  }, [onSuggestionRequest, query])
+
+  const listboxId = 'ticker-suggestion-list'
+  const showSuggestions = isInputFocused && query.trim().length >= 2
+  const hasSuggestions = suggestions.length > 0
+
+  const activeDescendant = useMemo(() => {
+    if (activeSuggestion < 0 || activeSuggestion >= suggestions.length) return undefined
+    return `ticker-option-${activeSuggestion}`
+  }, [activeSuggestion, suggestions.length])
+
+  function onInputKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (!showSuggestions) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (!hasSuggestions) return
+      setActiveSuggestion((prev) => (prev + 1) % suggestions.length)
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (!hasSuggestions) return
+      setActiveSuggestion((prev) =>
+        prev <= 0 ? suggestions.length - 1 : prev - 1,
+      )
+      return
+    }
+    if (e.key === 'Enter' && activeSuggestion >= 0 && activeSuggestion < suggestions.length) {
+      e.preventDefault()
+      onSuggestionSelect(suggestions[activeSuggestion])
+      setInputFocused(false)
+      return
+    }
+    if (e.key === 'Escape') {
+      setInputFocused(false)
+      setActiveSuggestion(-1)
+    }
+  }
+
   const resultHint =
     searchResult && !searchLoading ? contextLine(searchSource) : null
 
@@ -67,7 +134,21 @@ export function SearchPanel({
           autoComplete="off"
           placeholder="AAPL"
           value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
+          onChange={(e) => {
+            onQueryChange(e.target.value)
+            setActiveSuggestion(-1)
+            setInputFocused(true)
+          }}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => {
+            window.setTimeout(() => setInputFocused(false), 120)
+          }}
+          onKeyDown={onInputKeyDown}
+          role="combobox"
+          aria-expanded={showSuggestions}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-activedescendant={activeDescendant}
           className="min-h-12 flex-1 border border-white/10 bg-black/50 px-4 font-mono text-sm text-white transition-colors duration-200 placeholder:text-zinc-600 focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/20"
         />
         <button
@@ -78,6 +159,44 @@ export function SearchPanel({
           {searchLoading ? 'Running…' : 'Search'}
         </button>
       </form>
+
+      {showSuggestions ? (
+        <div
+          className="mt-2 border border-white/10 bg-black/80"
+          role="listbox"
+          id={listboxId}
+          aria-label="Ticker suggestions"
+        >
+          {suggestionLoading ? (
+            <p className="px-3 py-2 font-mono text-xs text-zinc-400">Loading suggestions…</p>
+          ) : hasSuggestions ? (
+            suggestions.map((symbol, idx) => (
+              <button
+                key={symbol}
+                id={`ticker-option-${idx}`}
+                type="button"
+                role="option"
+                aria-selected={idx === activeSuggestion}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onSuggestionSelect(symbol)
+                  setInputFocused(false)
+                }}
+                className={[
+                  'block w-full border-b border-white/5 px-3 py-2 text-left font-mono text-xs transition-colors last:border-b-0',
+                  idx === activeSuggestion
+                    ? 'bg-white/10 text-white'
+                    : 'text-zinc-300 hover:bg-white/5 hover:text-white',
+                ].join(' ')}
+              >
+                {symbol}
+              </button>
+            ))
+          ) : (
+            <p className="px-3 py-2 font-mono text-xs text-zinc-500">No matching tickers.</p>
+          )}
+        </div>
+      ) : null}
 
       {searchError ? (
         <p

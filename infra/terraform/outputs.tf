@@ -42,6 +42,11 @@ output "sentiment_cache_list_url" {
   value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/sentiment/cache"
 }
 
+output "ticker_suggest_url_template" {
+  description = "GET ticker suggestions by prefix (e.g. .../tickers/suggest?q=AAP&limit=10)"
+  value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/tickers/suggest?q={prefix}&limit={n}"
+}
+
 output "sentiment_cache_table_name" {
   description = "DynamoDB table for precomputed per-symbol sentiment"
   value       = aws_dynamodb_table.sentiment_cache.name

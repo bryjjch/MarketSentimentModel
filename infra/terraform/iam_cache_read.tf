@@ -26,3 +26,22 @@ resource "aws_iam_role_policy" "cache_read_ddb" {
     ]
   })
 }
+
+resource "aws_iam_role_policy" "cache_read_valid_tickers_ssm" {
+  count = var.valid_tickers_ssm_param != "" ? 1 : 0
+  name  = "${var.project_name}-cache-read-valid-tickers-ssm"
+  role  = aws_iam_role.cache_read_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.valid_tickers_ssm_param}",
+        ]
+      },
+    ]
+  })
+}

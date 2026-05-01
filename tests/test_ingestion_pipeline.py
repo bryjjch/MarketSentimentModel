@@ -18,7 +18,9 @@ from finsense_shared import (
     prediction_key,
     pseudo_label_key,
     raw_key,
+    search_tickers_by_prefix,
 )
+import finsense_shared.valid_tickers as valid_tickers
 from finsense_shared.confidence import ConfidenceMetric
 from finsense_shared.llm_label import LABEL_ID_TO_STR, SYSTEM_PROMPT, normalize_label, pseudo_label_text
 
@@ -79,6 +81,18 @@ def test_normalize_symbol_roundtrip() -> None:
     assert normalize_symbol("  msft ") == "MSFT"
     assert normalize_symbol("") is None
     assert normalize_symbol("TOO_LONG_TICKER") is None
+
+
+def test_valid_ticker_loader_from_json_and_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VALID_TICKERS_SSM_PARAM", "")
+    monkeypatch.setenv("VALID_TICKERS_FILE", "")
+    monkeypatch.setenv("VALID_TICKERS_JSON", "[\"aapl\", \"MSFT\", \"AAPL\", \"META\"]")
+    valid_tickers.load_valid_tickers(force_reload=True)
+
+    loaded = valid_tickers.load_valid_tickers()
+    assert loaded == ("AAPL", "META", "MSFT")
+    assert "AAPL" in valid_tickers.load_valid_ticker_set()
+    assert search_tickers_by_prefix("aa", limit=5) == ["AAPL"]
 
 
 def test_s3io_write_and_read_jsonl() -> None:

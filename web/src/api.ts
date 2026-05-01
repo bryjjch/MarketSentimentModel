@@ -1,6 +1,7 @@
 import type { SentimentRow } from './types'
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
+const DEFAULT_SUGGEST_LIMIT = 10
 
 function joinUrl(base: string, path: string): string {
   const b = base.replace(/\/$/, '')
@@ -65,4 +66,29 @@ export async function postSentimentBySymbol(
     throw new Error(msg || `Request failed (${res.status})`)
   }
   return (await res.json()) as SentimentRow
+}
+
+export async function fetchTickerSuggestions(
+  baseUrl: string,
+  query: string,
+  limit = DEFAULT_SUGGEST_LIMIT,
+): Promise<string[]> {
+  const q = query.trim().toUpperCase()
+  if (!q) return []
+
+  const url = new URL(joinUrl(baseUrl, '/tickers/suggest'))
+  url.searchParams.set('q', q)
+  url.searchParams.set('limit', String(Math.min(Math.max(limit, 1), 25)))
+
+  const res = await fetch(url.toString(), { method: 'GET' })
+  if (!res.ok) {
+    await res.text()
+    throw new Error(`Could not load ticker suggestions (${res.status}).`)
+  }
+
+  const data: unknown = await res.json()
+  if (!data || typeof data !== 'object' || !Array.isArray((data as { suggestions?: unknown }).suggestions)) {
+    throw new Error('Suggestion response was unexpected.')
+  }
+  return (data as { suggestions: string[] }).suggestions
 }
