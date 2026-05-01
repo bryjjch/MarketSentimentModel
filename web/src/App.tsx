@@ -118,11 +118,11 @@ export default function App() {
                 FinSense
               </p>
               <h1 className="text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-5xl">
-                Market sentiment
+                Market Sentiment
               </h1>
               <p className="max-w-xl text-pretty text-base leading-relaxed text-zinc-500">
-                News-driven scores per symbol, distilled into a monochrome
-                overview. Search any ticker or open a tile for sources.
+                News-driven scores per symbol. Search any ticker or open a tile
+                for sources.
               </p>
             </div>
             <div className="hidden shrink-0 font-mono text-[10px] leading-relaxed text-zinc-600 sm:block sm:text-right">
@@ -159,9 +159,8 @@ export default function App() {
                   Heatmap
                 </p>
                 <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-500">
-                  Tiles encode sentiment in grayscale. Open a symbol for
-                  headlines and refresh. Add from search to pin extras on the
-                  grid.
+                  Open a symbol for headlines and refresh. Search to add more to
+                  the grid.
                 </p>
               </div>
             </div>

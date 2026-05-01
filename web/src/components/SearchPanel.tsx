@@ -55,11 +55,6 @@ export function SearchPanel({
           US equities · 1–5 letters
         </span>
       </div>
-      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-500">
-        Full runs can take up to about half a minute while coverage is gathered
-        and scored.
-      </p>
-
       <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-3 sm:flex-row">
         <label className="sr-only" htmlFor="ticker-search">
           Ticker symbol
