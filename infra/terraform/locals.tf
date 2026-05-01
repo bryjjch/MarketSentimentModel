@@ -1,9 +1,6 @@
 locals {
-  # Reddit + Finnhub credentials (Secrets Manager); empty strings omitted.
-  provider_secret_arns = compact([
-    var.reddit_credentials_secret_arn,
-    var.finnhub_secret_arn,
-  ])
+  # Finnhub API key (Secrets Manager); empty string omitted.
+  provider_secret_arns = compact([var.finnhub_secret_arn])
   bucket_name = coalesce(
     var.bucket_name,
     "${var.project_name}-models-${data.aws_caller_identity.current.account_id}"

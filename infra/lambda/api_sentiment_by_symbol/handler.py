@@ -101,12 +101,10 @@ def run_sentiment(symbol: str, options: dict[str, Any] | None) -> dict[str, Any]
     opts = options or {}
     max_articles = int(opts.get("max_articles", DEFAULT_MAX_ARTICLES))
     max_articles = max(1, min(max_articles, 40))
-    include_social = bool(opts.get("include_social", True))
 
     items: list[CollectedItem] = collect_for_symbol(
         symbol,
         max_articles=max_articles,
-        include_social=include_social,
     )
 
     if not items:
@@ -117,7 +115,7 @@ def run_sentiment(symbol: str, options: dict[str, Any] | None) -> dict[str, Any]
             "label": "neutral",
             "article_count": 0,
             "recent_headlines": [],
-            "sources": {"news_rss": 0, "reddit": 0, "finnhub": 0},
+            "sources": {"news_rss": 0, "finnhub": 0},
             "updated_at": now,
             "detail": "no_articles_collected",
         }
@@ -132,7 +130,7 @@ def run_sentiment(symbol: str, options: dict[str, Any] | None) -> dict[str, Any]
             "label": "neutral",
             "article_count": 0,
             "recent_headlines": [],
-            "sources": {"news_rss": 0, "reddit": 0, "finnhub": 0},
+            "sources": {"news_rss": 0, "finnhub": 0},
             "updated_at": now,
             "detail": "no_non_empty_text",
         }
@@ -173,7 +171,7 @@ def run_sentiment(symbol: str, options: dict[str, Any] | None) -> dict[str, Any]
     for it in kept[:RECENT_HEADLINES_MAX]:
         headlines.append({"title": it.title, "url": it.url})
 
-    src_counts: dict[str, int] = {"news_rss": 0, "reddit": 0, "finnhub": 0}
+    src_counts: dict[str, int] = {"news_rss": 0, "finnhub": 0}
     for it in kept:
         if it.source_type in src_counts:
             src_counts[it.source_type] += 1

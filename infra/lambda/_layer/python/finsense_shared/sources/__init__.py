@@ -1,4 +1,4 @@
-"""News/social source adapters (shared between on-demand sentiment Lambda and daily ingestion)."""
+"""News source adapters (shared between on-demand sentiment Lambda and daily ingestion)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import os
 from .base import CollectedItem
 from .finnhub_news import collect_finnhub_news, finnhub_news_enabled
 from .news_rss import collect_news_rss
-from .reddit import collect_reddit
 
 
 def _finnhub_fallback_rss_enabled() -> bool:
@@ -47,29 +46,19 @@ def collect_for_symbol(
     symbol: str,
     *,
     max_articles: int,
-    include_social: bool,
 ) -> list[CollectedItem]:
-    """Gather text items: Finnhub (when configured) or Google News RSS, then Reddit if enabled.
+    """Gather text items from Finnhub (when configured) or Google News RSS.
 
     Total item count is capped at ``max_articles`` (hard limit 40). Duplicates are
     removed by URL (falling back to title).
 
-    When Finnhub is configured but returns fewer than the news quota, RSS backfill
+    When Finnhub is configured but returns fewer than requested, RSS backfill
     runs only if ``FINNHUB_FALLBACK_RSS`` is ``true`` (default off for accuracy).
     """
     max_articles = max(1, min(max_articles, 40))
 
-    if include_social:
-        n_news = max(1, max_articles // 2)
-        n_social = max_articles - n_news
-    else:
-        n_news = max_articles
-        n_social = 0
-
     items: list[CollectedItem] = []
-    items.extend(_collect_news_slot(symbol, n_news))
-    if n_social > 0:
-        items.extend(collect_reddit(symbol, max_items=n_social))
+    items.extend(_collect_news_slot(symbol, max_articles))
 
     seen: set[str] = set()
     unique: list[CollectedItem] = []
@@ -90,5 +79,4 @@ __all__ = [
     "collect_finnhub_news",
     "finnhub_news_enabled",
     "collect_news_rss",
-    "collect_reddit",
 ]

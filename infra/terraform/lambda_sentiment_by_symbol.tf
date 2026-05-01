@@ -24,7 +24,6 @@ resource "aws_lambda_function" "api_sentiment_by_symbol" {
   environment {
     variables = {
       SAGEMAKER_ENDPOINT_NAME = aws_sagemaker_endpoint.classifier.name
-      REDDIT_SECRET_ARN       = var.reddit_credentials_secret_arn
       FINNHUB_SECRET_ARN      = var.finnhub_secret_arn
       RECENT_HEADLINES_MAX    = "10"
       DEFAULT_MAX_ARTICLES    = "12"

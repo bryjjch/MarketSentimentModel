@@ -90,7 +90,7 @@ def test_collect_for_symbol_skips_rss_when_finnhub_fills_quota(monkeypatch: pyte
 
     from finsense_shared.sources import collect_for_symbol
 
-    out = collect_for_symbol("AAPL", max_articles=6, include_social=False)
+    out = collect_for_symbol("AAPL", max_articles=6)
     assert len(out) == 6
     assert all(it.source_type == "finnhub" for it in out)
 
@@ -113,6 +113,6 @@ def test_collect_for_symbol_falls_back_to_rss_without_finnhub(monkeypatch: pytes
 
     from finsense_shared.sources import collect_for_symbol
 
-    out = collect_for_symbol("AAPL", max_articles=4, include_social=False)
+    out = collect_for_symbol("AAPL", max_articles=4)
     assert len(out) == 1
     assert out[0].source_type == "news_rss"

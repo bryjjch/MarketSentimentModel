@@ -1,4 +1,4 @@
-"""Source adapters: fetch candidate texts for sentiment (news, social, etc.)."""
+"""Source adapters: fetch candidate texts for sentiment (news, etc.)."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ class CollectedItem:
     title: str
     url: str
     text: str
-    source_type: str  # e.g. "news_rss", "reddit"
+    source_type: str  # e.g. "news_rss", "finnhub"
 
 
 class SourceAdapter(Protocol):
     """Pluggable source: returns items for a normalized ticker symbol."""
 
-    def collect(self, symbol: str, *, max_items: int, include_social: bool) -> list[CollectedItem]:
+    def collect(self, symbol: str, *, max_items: int) -> list[CollectedItem]:
         ...
