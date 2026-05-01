@@ -2,34 +2,20 @@ import type { CSSProperties } from 'react'
 
 type Hsl = { h: number; s: number; l: number }
 
-const BEARISH_HI: Hsl = { h: 357, s: 46, l: 27 }
-const BEARISH_LO: Hsl = { h: 352, s: 40, l: 17 }
+/** Achromatic neutral — avoids hue interpolation through purple/blue. */
+const NEUTRAL_L_HI = 21
+const NEUTRAL_L_LO = 14
 
-const NEUTRAL_HI: Hsl = { h: 220, s: 11, l: 20 }
-const NEUTRAL_LO: Hsl = { h: 228, s: 8, l: 13 }
+/** Strong red family (both stops); gradient depth from lightness only. */
+const RED_HI: Hsl = { h: 3, s: 56, l: 30 }
+const RED_LO: Hsl = { h: 3, s: 48, l: 18 }
 
-const BULLISH_HI: Hsl = { h: 154, s: 44, l: 30 }
-const BULLISH_LO: Hsl = { h: 158, s: 38, l: 20 }
+/** Strong green family — hue kept in true green, not teal/cyan. */
+const GREEN_HI: Hsl = { h: 146, s: 52, l: 34 }
+const GREEN_LO: Hsl = { h: 148, s: 46, l: 21 }
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
-}
-
-/** Shortest path on the hue wheel (degrees). */
-function lerpHue(a: number, b: number, t: number): number {
-  let d = b - a
-  if (d > 180) d -= 360
-  if (d < -180) d += 360
-  const h = a + d * t
-  return ((h % 360) + 360) % 360
-}
-
-function lerpHsl(from: Hsl, to: Hsl, t: number): Hsl {
-  return {
-    h: lerpHue(from.h, to.h, t),
-    s: lerp(from.s, to.s, t),
-    l: lerp(from.l, to.l, t),
-  }
 }
 
 function hsl({ h, s, l }: Hsl): string {
@@ -37,9 +23,9 @@ function hsl({ h, s, l }: Hsl): string {
 }
 
 /**
- * Map sentiment score (roughly -1 … +1) to a card surface: dusty rose for
- * bearish, cool slate at neutral, muted emerald for bullish — tuned for a
- * dark UI without neon saturation.
+ * Map sentiment score (roughly -1 … +1) to a card surface. Bearish fades from
+ * clear red through gray; bullish fades from gray into green — never blending
+ * hue “across” the wheel (which reads as purple / slate-blue).
  */
 export function scoreToCardStyle(score: number): CSSProperties {
   const t = Math.max(-1, Math.min(1, Number.isFinite(score) ? score : 0))
@@ -48,11 +34,27 @@ export function scoreToCardStyle(score: number): CSSProperties {
   let lo: Hsl
   if (t <= 0) {
     const k = t + 1
-    hi = lerpHsl(BEARISH_HI, NEUTRAL_HI, k)
-    lo = lerpHsl(BEARISH_LO, NEUTRAL_LO, k)
+    hi = {
+      h: RED_HI.h,
+      s: lerp(RED_HI.s, 0, k),
+      l: lerp(RED_HI.l, NEUTRAL_L_HI, k),
+    }
+    lo = {
+      h: RED_LO.h,
+      s: lerp(RED_LO.s, 0, k),
+      l: lerp(RED_LO.l, NEUTRAL_L_LO, k),
+    }
   } else {
-    hi = lerpHsl(NEUTRAL_HI, BULLISH_HI, t)
-    lo = lerpHsl(NEUTRAL_LO, BULLISH_LO, t)
+    hi = {
+      h: GREEN_HI.h,
+      s: lerp(0, GREEN_HI.s, t),
+      l: lerp(NEUTRAL_L_HI, GREEN_HI.l, t),
+    }
+    lo = {
+      h: GREEN_LO.h,
+      s: lerp(0, GREEN_LO.s, t),
+      l: lerp(NEUTRAL_L_LO, GREEN_LO.l, t),
+    }
   }
 
   const avgL = (hi.l + lo.l) / 2
