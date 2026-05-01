@@ -44,12 +44,12 @@ resource "aws_iam_role_policy" "ingestion_lambda" {
           Resource = aws_ssm_parameter.top_tickers.arn
         },
       ],
-      var.reddit_credentials_secret_arn != "" ? [
+      length(local.provider_secret_arns) > 0 ? [
         {
-          Sid      = "ReadRedditSecret"
+          Sid      = "ReadProviderSecrets"
           Effect   = "Allow"
           Action   = ["secretsmanager:GetSecretValue"]
-          Resource = var.reddit_credentials_secret_arn
+          Resource = local.provider_secret_arns
         }
       ] : []
     )

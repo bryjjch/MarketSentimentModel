@@ -85,6 +85,12 @@ variable "reddit_credentials_secret_arn" {
   default     = ""
 }
 
+variable "finnhub_secret_arn" {
+  type        = string
+  description = "Optional Secrets Manager ARN; secret JSON {\"api_key\":\"...\"} (or plain string) for Finnhub company news (symbol-keyed). Leave empty to use Google News RSS only."
+  default     = ""
+}
+
 variable "sentiment_cache_ttl_seconds" {
   type        = number
   description = "Unix seconds added to refresh time for DynamoDB expires_at (TTL cleanup)."

@@ -31,6 +31,7 @@ resource "aws_lambda_function" "ingestion" {
       TOP_TICKERS_SSM_PARAM              = aws_ssm_parameter.top_tickers.name
       DEFAULT_TICKERS_JSON               = var.top_tickers_json
       REDDIT_SECRET_ARN                  = var.reddit_credentials_secret_arn
+      FINNHUB_SECRET_ARN               = var.finnhub_secret_arn
     }
   }
 
