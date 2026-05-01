@@ -108,7 +108,7 @@ export default function App() {
     <div className="min-h-svh text-zinc-100">
       <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12">
         <header className="border-b border-white/[0.06] pb-12 text-left sm:pb-14">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between fs-rise">
             <div className="max-w-2xl space-y-4">
               <p className="font-mono text-[11px] font-medium uppercase tracking-[0.35em] text-zinc-500">
                 FinSense
@@ -134,6 +134,7 @@ export default function App() {
 
         <div className="mt-14 space-y-16 sm:mt-16 sm:space-y-20">
           <SearchPanel
+            className="fs-rise fs-rise-delay-2"
             query={query}
             onQueryChange={setQuery}
             onSubmit={onSearch}
@@ -144,7 +145,7 @@ export default function App() {
             onAddToHeatmap={onAddToHeatmap}
           />
 
-          <section>
+          <section className="fs-rise fs-rise-delay-3">
             <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">

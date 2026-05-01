@@ -95,19 +95,22 @@ export function Heatmap({
 
   if (loading) {
     return (
-      <div className="flex min-h-[220px] items-center justify-center border border-white/[0.06] bg-white/[0.02] px-6 py-20">
+      <div className="flex min-h-[220px] flex-col items-center justify-center gap-5 border border-white/[0.06] bg-white/[0.02] px-6 py-20 fs-result-reveal">
         <div
           className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-white"
           aria-hidden
         />
         <span className="sr-only">Loading heatmap</span>
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+          Loading overview
+        </p>
       </div>
     )
   }
 
   if (error && mergedRows.length === 0) {
     return (
-      <div className="border border-white/15 bg-black/50 px-6 py-8 text-left">
+      <div className="border border-white/15 bg-black/50 px-6 py-8 text-left fs-result-reveal">
         <p className="font-medium text-white">Could not load the overview</p>
         <p className="mt-2 font-mono text-xs leading-relaxed text-zinc-400">
           {error}
@@ -118,7 +121,7 @@ export function Heatmap({
 
   if (mergedRows.length === 0) {
     return (
-      <div className="border border-white/[0.06] bg-white/[0.02] px-6 py-16 text-center">
+      <div className="border border-white/[0.06] bg-white/[0.02] px-6 py-16 text-center fs-result-reveal">
         <p className="text-sm text-zinc-500">
           No symbols yet. Search above, then add tickers to your heatmap.
         </p>
@@ -129,20 +132,23 @@ export function Heatmap({
   return (
     <div className="space-y-4">
       {error ? (
-        <div className="border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-400">
+        <div className="border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-400 fs-result-reveal">
           {mergedRows.length > 0
             ? error
             : 'Overview could not be refreshed; showing symbols you have added.'}
         </div>
       ) : null}
       <div className="grid grid-cols-2 gap-px bg-white/[0.06] sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {mergedRows.map((row) => (
+        {mergedRows.map((row, i) => (
           <button
             key={row.symbol}
             type="button"
             onClick={() => onSelectSymbol?.(row)}
-            className="group relative flex flex-col border border-transparent bg-black/20 p-5 text-left transition focus:outline-none focus-visible:ring-1 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black hover:bg-black/40 sm:p-6"
-            style={scoreToCardStyle(row.score)}
+            className="group fs-tile-in relative flex flex-col border border-transparent bg-black/20 p-5 text-left transition-[transform,box-shadow] duration-300 ease-out focus:outline-none focus-visible:ring-1 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black hover:-translate-y-0.5 hover:bg-black/40 hover:shadow-[0_12px_40px_-12px_rgb(0_0_0/_0.65)] active:translate-y-0 sm:p-6"
+            style={{
+              ...scoreToCardStyle(row.score),
+              ['--fs-stagger' as string]: `${Math.min(i, 24) * 38}ms`,
+            }}
           >
             <span className="font-mono text-sm font-medium tracking-tight opacity-80">
               {row.symbol}

@@ -90,15 +90,16 @@ export function TickerDetailModal({
   const headlines = display.recent_headlines ?? []
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-4 backdrop-blur-sm sm:items-center"
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <div
-        className="max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto border border-white/[0.1] bg-[#080808] shadow-2xl shadow-black"
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm fs-modal-backdrop"
+        role="presentation"
+        aria-hidden
+        onClick={onClose}
+      />
+      <div
+        key={display.symbol}
+        className="relative z-10 max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto border border-white/[0.1] bg-[#080808] shadow-2xl shadow-black fs-modal-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="ticker-detail-title"
@@ -113,14 +114,17 @@ export function TickerDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wider text-zinc-400 transition hover:border-white/25 hover:text-white"
+            className="border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wider text-zinc-400 transition-colors duration-200 hover:border-white/25 hover:text-white active:scale-[0.98]"
           >
             Close
           </button>
         </div>
 
         <div className="space-y-8 px-6 py-8">
-          <div className="border p-6" style={scoreToCardStyle(display.score)}>
+          <div
+            className="border p-6 fs-result-reveal"
+            style={scoreToCardStyle(display.score)}
+          >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
                 Sentiment
@@ -142,7 +146,7 @@ export function TickerDetailModal({
           </div>
 
           {loading ? (
-            <div className="flex items-center gap-3 text-sm text-zinc-500">
+            <div className="flex items-center gap-3 text-sm text-zinc-500 fs-result-reveal">
               <div
                 className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-zinc-700 border-t-white"
                 aria-hidden
@@ -153,7 +157,7 @@ export function TickerDetailModal({
 
           {error ? (
             <p
-              className="border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-300"
+              className="border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-300 fs-result-reveal"
               role="alert"
             >
               {error}
@@ -170,7 +174,7 @@ export function TickerDetailModal({
                   type="button"
                   disabled={refreshing}
                   onClick={runLatestAnalysis}
-                  className="font-mono text-[10px] font-medium uppercase tracking-wider text-zinc-400 underline decoration-white/20 underline-offset-4 transition hover:text-white hover:decoration-white/50 disabled:opacity-40"
+                  className="font-mono text-[10px] font-medium uppercase tracking-wider text-zinc-400 underline decoration-white/20 underline-offset-4 transition-colors duration-200 hover:text-white hover:decoration-white/50 disabled:opacity-40"
                 >
                   {refreshing ? 'Updating…' : 'Refresh from latest news'}
                 </button>
@@ -179,12 +183,16 @@ export function TickerDetailModal({
             {headlines.length > 0 ? (
               <ul className="mt-5 space-y-3 border-l border-white/10 pl-4">
                 {headlines.map((h, i) => (
-                  <li key={`${h.url}-${i}`}>
+                  <li
+                    key={`${h.url}-${i}`}
+                    className="fs-headline-item"
+                    style={{ ['--fs-hl-stagger' as string]: `${i * 48}ms` }}
+                  >
                     <a
                       href={h.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-zinc-300 underline decoration-white/15 underline-offset-[5px] transition hover:text-white hover:decoration-white/40"
+                      className="text-sm text-zinc-300 underline decoration-white/15 underline-offset-[5px] transition-colors duration-200 hover:text-white hover:decoration-white/40"
                     >
                       {h.title || h.url}
                     </a>

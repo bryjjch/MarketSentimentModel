@@ -6,6 +6,7 @@ import type { SentimentRow } from '../types'
 export type SearchResultContext = 'heatmap' | 'saved' | 'fresh' | null
 
 type Props = {
+  className?: string
   query: string
   onQueryChange: (q: string) => void
   onSubmit: (e: FormEvent) => void
@@ -24,6 +25,7 @@ function contextLine(source: SearchResultContext): string | null {
 }
 
 export function SearchPanel({
+  className,
   query,
   onQueryChange,
   onSubmit,
@@ -36,8 +38,15 @@ export function SearchPanel({
   const resultHint =
     searchResult && !searchLoading ? contextLine(searchSource) : null
 
+  const rootClass = [
+    'border border-white/[0.08] bg-white/[0.02] p-8 text-left shadow-[0_0_0_1px_rgb(255_255_255_/_0.03)_inset] backdrop-blur-sm sm:p-10',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <section className="border border-white/[0.08] bg-white/[0.02] p-8 text-left shadow-[0_0_0_1px_rgb(255_255_255_/_0.03)_inset] backdrop-blur-sm sm:p-10">
+    <section className={rootClass}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
           Lookup
@@ -64,12 +73,12 @@ export function SearchPanel({
           placeholder="AAPL"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          className="min-h-12 flex-1 border border-white/10 bg-black/50 px-4 font-mono text-sm text-white placeholder:text-zinc-600 focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/20"
+          className="min-h-12 flex-1 border border-white/10 bg-black/50 px-4 font-mono text-sm text-white transition-colors duration-200 placeholder:text-zinc-600 focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/20"
         />
         <button
           type="submit"
           disabled={searchLoading}
-          className="min-h-12 shrink-0 border border-white bg-white px-8 font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:border-white/20 disabled:bg-zinc-600 disabled:text-zinc-400"
+          className="min-h-12 shrink-0 border border-white bg-white px-8 font-medium text-black transition-colors duration-200 hover:bg-zinc-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-white/20 disabled:bg-zinc-600 disabled:text-zinc-400 disabled:active:scale-100"
         >
           {searchLoading ? 'Running…' : 'Search'}
         </button>
@@ -77,7 +86,7 @@ export function SearchPanel({
 
       {searchError ? (
         <p
-          className="mt-6 border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-300"
+          className="mt-6 border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-300 fs-result-reveal"
           role="alert"
         >
           {searchError}
@@ -85,17 +94,27 @@ export function SearchPanel({
       ) : null}
 
       {searchLoading ? (
-        <div className="mt-8 flex items-center gap-4 text-sm text-zinc-400">
+        <div className="mt-8 flex items-center gap-4 text-sm text-zinc-400 fs-result-reveal">
           <div
             className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-zinc-700 border-t-white"
             aria-hidden
           />
-          <span>Gathering headlines and scoring…</span>
+          <span className="transition-opacity duration-300">
+            Gathering headlines and scoring…
+          </span>
+          <span className="ml-1 flex gap-1" aria-hidden>
+            <span className="inline-block h-1 w-1 rounded-full bg-zinc-500 fs-loader-dot" />
+            <span className="inline-block h-1 w-1 rounded-full bg-zinc-500 fs-loader-dot" />
+            <span className="inline-block h-1 w-1 rounded-full bg-zinc-500 fs-loader-dot" />
+          </span>
         </div>
       ) : null}
 
       {searchResult && !searchLoading ? (
-        <div className="mt-10 space-y-8 border-t border-white/[0.06] pt-10">
+        <div
+          key={searchResult.symbol}
+          className="mt-10 space-y-8 border-t border-white/[0.06] pt-10 fs-result-reveal"
+        >
           {resultHint ? (
             <p className="font-mono text-xs text-zinc-500">{resultHint}</p>
           ) : null}
@@ -128,7 +147,7 @@ export function SearchPanel({
             <button
               type="button"
               onClick={onAddToHeatmap}
-              className="border border-white/20 bg-transparent px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white transition hover:border-white/40 hover:bg-white/[0.04]"
+              className="border border-white/20 bg-transparent px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-colors duration-200 hover:border-white/40 hover:bg-white/[0.04] active:scale-[0.98]"
             >
               Add to heatmap
             </button>
@@ -141,12 +160,16 @@ export function SearchPanel({
             {searchResult.recent_headlines && searchResult.recent_headlines.length > 0 ? (
               <ul className="mt-4 space-y-3 border-l border-white/10 pl-4">
                 {searchResult.recent_headlines.map((h, i) => (
-                  <li key={`${h.url}-${i}`}>
+                  <li
+                    key={`${h.url}-${i}`}
+                    className="fs-headline-item"
+                    style={{ ['--fs-hl-stagger' as string]: `${i * 50}ms` }}
+                  >
                     <a
                       href={h.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-zinc-300 underline decoration-white/20 underline-offset-[5px] transition hover:text-white hover:decoration-white/50"
+                      className="text-sm text-zinc-300 underline decoration-white/20 underline-offset-[5px] transition-colors duration-200 hover:text-white hover:decoration-white/50"
                     >
                       {h.title || h.url}
                     </a>
