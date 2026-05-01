@@ -104,6 +104,10 @@ export default function App() {
     setHeatmapExtras((prev) => upsertHeatmapExtra(prev, row))
   }, [])
 
+  const onDetailModalClose = useCallback(() => {
+    setDetailRow(null)
+  }, [])
+
   return (
     <div className="min-h-svh text-zinc-100">
       <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12">
@@ -174,7 +178,7 @@ export default function App() {
       <TickerDetailModal
         apiBase={apiBase}
         row={detailRow}
-        onClose={() => setDetailRow(null)}
+        onClose={onDetailModalClose}
         onRowUpdate={onDetailRowUpdate}
       />
     </div>
