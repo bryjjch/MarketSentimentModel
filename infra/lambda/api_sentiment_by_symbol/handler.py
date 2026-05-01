@@ -13,7 +13,7 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
-from finsense_shared import aggregate_predictions, normalize_symbol
+from finsense_shared import aggregate_predictions, load_valid_ticker_set, normalize_symbol
 from finsense_shared.sources import collect_for_symbol
 from finsense_shared.sources.base import CollectedItem
 
@@ -27,6 +27,10 @@ _runtime = boto3.client("sagemaker-runtime")
 _ddb = boto3.resource("dynamodb") if CACHE_TABLE_NAME else None
 _JSON_HEADERS = {"Content-Type": "application/json"}
 logger = logging.getLogger()
+
+
+def _is_known_symbol(symbol: str) -> bool:
+    return symbol in load_valid_ticker_set()
 
 
 def _to_ddb_number(value: Any, default: str = "0") -> Decimal:
@@ -204,6 +208,8 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         sym = normalize_symbol(str(raw_sym) if raw_sym is not None else "")
         if not sym:
             return {"error": "invalid_symbol", "message": "Provide a valid symbol string"}
+        if not _is_known_symbol(sym):
+            return {"error": "invalid_symbol", "message": f"Unknown ticker symbol: {sym}"}
         out = run_sentiment(sym, event.get("options") if isinstance(event.get("options"), dict) else {})
         return out
 
@@ -215,6 +221,8 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     sym = normalize_symbol(str(raw_sym) if raw_sym is not None else "")
     if not sym:
         return _response(400, {"error": "invalid_symbol", "message": "Body must include symbol"})
+    if not _is_known_symbol(sym):
+        return _response(400, {"error": "invalid_symbol", "message": f"Unknown ticker symbol: {sym}"})
 
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     out = run_sentiment(sym, options)

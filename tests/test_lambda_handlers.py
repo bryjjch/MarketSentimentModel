@@ -104,6 +104,27 @@ class FakeDDBResource:
         return self.table_obj
 
 
+class FakeCacheReadTable:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+
+    def scan(self, **kwargs: Any) -> dict[str, Any]:
+        return {"Items": list(self.rows.values())}
+
+    def get_item(self, *, Key: dict[str, str]) -> dict[str, Any]:
+        sym = Key["symbol"]
+        item = self.rows.get(sym)
+        return {"Item": item} if item else {}
+
+
+class FakeCacheReadResource:
+    def __init__(self) -> None:
+        self.table_obj = FakeCacheReadTable()
+
+    def Table(self, name: str) -> FakeCacheReadTable:
+        return self.table_obj
+
+
 @pytest.fixture
 def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3:
     fake = FakeS3()
@@ -349,3 +370,82 @@ def test_api_sentiment_by_symbol_error_does_not_write_cache(monkeypatch: pytest.
     out = handler.run_sentiment("AAPL", {"max_articles": 5, "include_social": False})
     assert out["error"] == "invalid_sagemaker_shape"
     assert fake_ddb.table_obj.items == []
+
+
+def test_api_sentiment_by_symbol_rejects_unknown_ticker(monkeypatch: pytest.MonkeyPatch) -> None:
+    import boto3
+
+    fake_runtime = FakeSageMakerRuntimeForApi()
+    fake_ddb = FakeDDBResource()
+
+    def boto_client(name: str, **kwargs: Any) -> Any:
+        if name == "sagemaker-runtime":
+            return fake_runtime
+        raise AssertionError(f"unexpected boto3.client({name})")
+
+    def boto_resource(name: str, **kwargs: Any) -> Any:
+        if name == "dynamodb":
+            return fake_ddb
+        raise AssertionError(f"unexpected boto3.resource({name})")
+
+    monkeypatch.setattr(boto3, "client", boto_client)
+    monkeypatch.setattr(boto3, "resource", boto_resource)
+
+    handler = _reload_handler(
+        {
+            "AWS_DEFAULT_REGION": "us-east-1",
+            "SAGEMAKER_ENDPOINT_NAME": "test-endpoint",
+            "CACHE_TABLE_NAME": "test-cache",
+            "CACHE_TTL_SECONDS": "600",
+        },
+        "api_sentiment_by_symbol",
+    )
+
+    resp = handler.lambda_handler(
+        {
+            "requestContext": {"http": {"method": "POST"}},
+            "body": json.dumps({"symbol": "ZZZZZ"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert resp["statusCode"] == 400
+    body = json.loads(resp["body"])
+    assert body["error"] == "invalid_symbol"
+    assert "Unknown ticker symbol" in body["message"]
+
+
+def test_cache_read_ticker_suggestions_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    import boto3
+
+    fake_ddb = FakeCacheReadResource()
+
+    def boto_resource(name: str, **kwargs: Any) -> Any:
+        if name == "dynamodb":
+            return fake_ddb
+        raise AssertionError(f"unexpected boto3.resource({name})")
+
+    monkeypatch.setattr(boto3, "resource", boto_resource)
+
+    handler = _reload_handler(
+        {
+            "AWS_DEFAULT_REGION": "us-east-1",
+            "TABLE_NAME": "sentiment-cache",
+            "VALID_TICKERS_JSON": "[\"AAPL\", \"AAP\", \"MSFT\"]",
+            "VALID_TICKERS_SSM_PARAM": "",
+        },
+        "cache_read",
+    )
+    resp = handler.lambda_handler(
+        {
+            "requestContext": {"http": {"path": "/tickers/suggest"}},
+            "rawPath": "/tickers/suggest",
+            "queryStringParameters": {"q": "aa", "limit": "5"},
+            "pathParameters": {},
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    body = json.loads(resp["body"])
+    assert body["query"] == "AA"
+    assert body["suggestions"] == ["AAP", "AAPL"]

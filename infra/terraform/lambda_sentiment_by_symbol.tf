@@ -29,6 +29,10 @@ resource "aws_lambda_function" "api_sentiment_by_symbol" {
       DEFAULT_MAX_ARTICLES    = "12"
       CACHE_TABLE_NAME        = aws_dynamodb_table.sentiment_cache.name
       CACHE_TTL_SECONDS       = tostring(var.sentiment_cache_api_ttl_seconds)
+      VALID_TICKERS_SSM_PARAM = var.valid_tickers_ssm_param
+      VALID_TICKERS_JSON      = var.valid_tickers_json
+      VALID_TICKERS_FILE      = var.valid_tickers_file
+      VALID_TICKERS_CACHE_TTL_SECONDS = tostring(var.valid_tickers_cache_ttl_seconds)
     }
   }
 

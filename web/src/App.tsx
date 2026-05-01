@@ -5,6 +5,7 @@ import {
   type FormEvent,
 } from 'react'
 import {
+  fetchTickerSuggestions,
   fetchSentimentCacheSymbol,
   postSentimentBySymbol,
 } from './api'
@@ -37,12 +38,13 @@ export default function App() {
   const [searchError, setSearchError] = useState<string | null>(null)
   const [searchResult, setSearchResult] = useState<SentimentRow | null>(null)
   const [searchSource, setSearchSource] = useState<SearchResultContext>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestionLoading, setSuggestionLoading] = useState(false)
 
   const [detailRow, setDetailRow] = useState<SentimentRow | null>(null)
 
-  const onSearch = useCallback(
-    async (e: FormEvent) => {
-      e.preventDefault()
+  const runSearch = useCallback(
+    async (rawQuery: string) => {
       setSearchError(null)
 
       if (!apiBase) {
@@ -50,7 +52,7 @@ export default function App() {
         return
       }
 
-      const sym = normalizeTicker(query)
+      const sym = normalizeTicker(rawQuery)
       if (!sym) {
         setSearchError('Enter a valid ticker (1-5 letters, e.g. AAPL).')
         setSearchResult(null)
@@ -58,9 +60,7 @@ export default function App() {
         return
       }
 
-      const fromGrid = heatmapRows.find(
-        (r) => r.symbol.toUpperCase() === sym,
-      )
+      const fromGrid = heatmapRows.find((r) => r.symbol.toUpperCase() === sym)
       if (fromGrid) {
         setSearchResult(fromGrid)
         setSearchSource('heatmap')
@@ -84,14 +84,53 @@ export default function App() {
         setSearchResult(fresh)
         setSearchSource('fresh')
       } catch (err: unknown) {
-        setSearchError(err instanceof Error ? err.message : String(err))
+        const msg = err instanceof Error ? err.message : String(err)
+        setSearchError(msg || 'Could not look up that ticker.')
         setSearchResult(null)
         setSearchSource(null)
       } finally {
         setSearchLoading(false)
       }
     },
-    [apiBase, heatmapRows, query],
+    [apiBase, heatmapRows],
+  )
+
+  const onSearch = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault()
+      await runSearch(query)
+    },
+    [query, runSearch],
+  )
+
+  const onSuggestionRequest = useCallback(
+    async (q: string) => {
+      if (!apiBase || q.trim().length < 2) {
+        setSuggestions([])
+        setSuggestionLoading(false)
+        return
+      }
+      setSuggestionLoading(true)
+      try {
+        const next = await fetchTickerSuggestions(apiBase, q, 10)
+        setSuggestions(next)
+      } catch {
+        // Keep typeahead non-blocking; search submit still performs hard validation.
+        setSuggestions([])
+      } finally {
+        setSuggestionLoading(false)
+      }
+    },
+    [apiBase],
+  )
+
+  const onSuggestionSelect = useCallback(
+    (symbol: string) => {
+      setQuery(symbol)
+      setSuggestions([])
+      void runSearch(symbol)
+    },
+    [runSearch],
   )
 
   const onAddToHeatmap = useCallback(() => {
@@ -142,8 +181,12 @@ export default function App() {
             query={query}
             onQueryChange={setQuery}
             onSubmit={onSearch}
+            onSuggestionRequest={onSuggestionRequest}
+            onSuggestionSelect={onSuggestionSelect}
             searchError={searchError}
             searchLoading={searchLoading}
+            suggestionLoading={suggestionLoading}
+            suggestions={suggestions}
             searchResult={searchResult}
             searchSource={searchSource}
             onAddToHeatmap={onAddToHeatmap}

@@ -60,3 +60,22 @@ resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_secrets" {
     ]
   })
 }
+
+resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_valid_tickers_ssm" {
+  count = var.valid_tickers_ssm_param != "" ? 1 : 0
+  name  = "${var.project_name}-api-sentiment-by-symbol-valid-tickers-ssm"
+  role  = aws_iam_role.api_sentiment_by_symbol_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.valid_tickers_ssm_param}",
+        ]
+      },
+    ]
+  })
+}

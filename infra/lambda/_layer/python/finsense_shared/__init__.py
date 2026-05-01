@@ -19,6 +19,7 @@ from .partitions import (
 )
 from .symbol import normalize_symbol
 from .tickers import load_tickers
+from .valid_tickers import load_valid_ticker_set, load_valid_tickers, search_tickers_by_prefix
 
 __all__ = [
     "ConfidenceMetric",
@@ -28,10 +29,13 @@ __all__ = [
     "dt_from_key",
     "is_low_confidence",
     "load_tickers",
+    "load_valid_ticker_set",
+    "load_valid_tickers",
     "normalize_symbol",
     "partition_prefix",
     "prediction_key",
     "pseudo_label_key",
     "raw_key",
+    "search_tickers_by_prefix",
     "sentiment_score_from_probabilities",
 ]

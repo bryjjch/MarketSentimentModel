@@ -32,6 +32,12 @@ resource "aws_apigatewayv2_route" "get_sentiment_cache" {
   target    = "integrations/${aws_apigatewayv2_integration.cache_read.id}"
 }
 
+resource "aws_apigatewayv2_route" "get_ticker_suggestions" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /tickers/suggest"
+  target    = "integrations/${aws_apigatewayv2_integration.cache_read.id}"
+}
+
 resource "aws_lambda_permission" "apigw_invoke_api_sentiment_by_symbol" {
   statement_id  = "AllowAPIGatewayInvokeSentiment"
   action        = "lambda:InvokeFunction"

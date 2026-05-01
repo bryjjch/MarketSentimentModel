@@ -103,6 +103,30 @@ variable "top_tickers_json" {
   default     = "[\"AAPL\",\"MSFT\",\"GOOGL\",\"META\",\"NVDA\"]"
 }
 
+variable "valid_tickers_ssm_param" {
+  type        = string
+  description = "Optional SSM parameter name containing a JSON array of valid ticker symbols used by API validation/suggestions."
+  default     = ""
+}
+
+variable "valid_tickers_json" {
+  type        = string
+  description = "Fallback JSON array of valid ticker symbols for API validation/suggestions when SSM is not used."
+  default     = ""
+}
+
+variable "valid_tickers_cache_ttl_seconds" {
+  type        = number
+  description = "In-memory cache TTL (seconds) for the valid ticker universe inside Lambda execution environments."
+  default     = 900
+}
+
+variable "valid_tickers_file" {
+  type        = string
+  description = "Optional path to a packaged ticker JSON file readable by Lambda (e.g. /opt/python/finsense_shared/valid_tickers_us.json)."
+  default     = ""
+}
+
 # --- Data bucket + daily ingestion / pseudo-labeling pipeline ---------------
 
 variable "data_bucket_name" {

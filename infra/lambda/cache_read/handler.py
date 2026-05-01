@@ -12,6 +12,7 @@ from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Attr
+from finsense_shared import search_tickers_by_prefix
 
 TABLE_NAME = os.environ["TABLE_NAME"]
 _table = boto3.resource("dynamodb").Table(TABLE_NAME)
@@ -19,6 +20,8 @@ _table = boto3.resource("dynamodb").Table(TABLE_NAME)
 _JSON = {"Content-Type": "application/json"}
 _DEFAULT_LIST_LIMIT = 100
 _MAX_LIST_LIMIT = 500
+_DEFAULT_SUGGEST_LIMIT = 10
+_MAX_SUGGEST_LIMIT = 25
 
 
 def _json_safe(obj: Any) -> Any:
@@ -67,6 +70,27 @@ def _decode_cursor(raw: str | None) -> dict[str, Any] | None:
     return obj
 
 
+def _parse_suggest_limit(query: dict[str, str] | None) -> int:
+    """Parse and clamp requested suggest size."""
+    raw = (query or {}).get("limit")
+    if raw is None or raw == "":
+        return _DEFAULT_SUGGEST_LIMIT
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError("limit must be an integer") from None
+    if value < 1:
+        raise ValueError("limit must be >= 1")
+    return min(value, _MAX_SUGGEST_LIMIT)
+
+
+def _is_suggest_route(event: dict[str, Any]) -> bool:
+    """Check if the request is for the ticker suggestions endpoint."""
+    path = ((event.get("requestContext") or {}).get("http") or {}).get("path") or ""
+    raw_path = event.get("rawPath") or ""
+    return path.endswith("/tickers/suggest") or raw_path.endswith("/tickers/suggest")
+
+
 def _scan_active_items(now: int, limit: int, cursor: dict[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     """Scan one page of active rows and return a pagination key when available."""
     kwargs: dict[str, Any] = {
@@ -82,6 +106,30 @@ def _scan_active_items(now: int, limit: int, cursor: dict[str, Any] | None) -> t
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     """One row for ``pathParameters.symbol``, or all active rows when symbol is omitted."""
+    if _is_suggest_route(event):
+        query = event.get("queryStringParameters") or {}
+        q = (query.get("q") or "").strip()
+        if not q:
+            return {
+                "statusCode": 400,
+                "headers": _JSON,
+                "body": json.dumps({"error": "bad_request", "message": "q is required"}),
+            }
+        try:
+            limit = _parse_suggest_limit(query)
+        except ValueError as exc:
+            return {
+                "statusCode": 400,
+                "headers": _JSON,
+                "body": json.dumps({"error": "bad_request", "message": str(exc)}),
+            }
+        suggestions = search_tickers_by_prefix(q, limit=limit)
+        return {
+            "statusCode": 200,
+            "headers": _JSON,
+            "body": json.dumps({"query": q.upper(), "suggestions": suggestions}),
+        }
+
     sym = (event.get("pathParameters") or {}).get("symbol") or ""
     sym = sym.strip().upper()
     if not sym:
