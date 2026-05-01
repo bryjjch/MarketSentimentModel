@@ -1,7 +1,9 @@
 import type { FormEvent } from 'react'
 import { formatScore } from '../formatScore'
-import type { SentimentRow } from '../types'
 import { scoreToCardStyle } from '../scoreColor'
+import type { SentimentRow } from '../types'
+
+export type SearchResultContext = 'heatmap' | 'saved' | 'fresh' | null
 
 type Props = {
   query: string
@@ -10,7 +12,15 @@ type Props = {
   searchError: string | null
   searchLoading: boolean
   searchResult: SentimentRow | null
-  searchSource: 'heatmap' | 'cached' | 'live' | null
+  searchSource: SearchResultContext
+  onAddToHeatmap: () => void
+}
+
+function contextLine(source: SearchResultContext): string | null {
+  if (source === 'heatmap') return 'This symbol is already on your heatmap below.'
+  if (source === 'saved') return 'Using the latest saved score for this symbol.'
+  if (source === 'fresh') return 'Just finished a full pass over recent coverage.'
+  return null
 }
 
 export function SearchPanel({
@@ -21,13 +31,17 @@ export function SearchPanel({
   searchLoading,
   searchResult,
   searchSource,
+  onAddToHeatmap,
 }: Props) {
+  const resultHint =
+    searchResult && !searchLoading ? contextLine(searchSource) : null
+
   return (
     <section className="rounded-2xl border border-slate-700/60 bg-slate-900/50 p-6 text-left shadow-xl backdrop-blur">
-      <h2 className="text-lg font-semibold text-slate-100">On-demand search</h2>
+      <h2 className="text-lg font-semibold text-slate-100">Search tickers</h2>
       <p className="mt-1 text-sm text-slate-400">
-        Look up sentiment for any US ticker. Symbols already on the heatmap use
-        the cached snapshot; others call the API (may take up to ~30s).
+        Enter a US equity symbol to see sentiment and sources. New lookups may take
+        up to about half a minute while coverage is gathered and scored.
       </p>
 
       <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -50,7 +64,7 @@ export function SearchPanel({
           disabled={searchLoading}
           className="min-h-11 rounded-lg bg-violet-600 px-6 font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {searchLoading ? 'Analyzing…' : 'Search'}
+          {searchLoading ? 'Working...' : 'Search'}
         </button>
       </form>
 
@@ -66,27 +80,15 @@ export function SearchPanel({
             className="h-8 w-8 shrink-0 animate-spin rounded-full border-2 border-violet-400 border-t-transparent"
             aria-hidden
           />
-          <span>Running sentiment pipeline (news + model)…</span>
+          <span>Gathering recent headlines and running sentiment...</span>
         </div>
       ) : null}
 
       {searchResult && !searchLoading ? (
         <div className="mt-6 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {searchSource === 'heatmap' ? (
-              <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-300">
-                From heatmap (cached)
-              </span>
-            ) : searchSource === 'cached' ? (
-              <span className="rounded-full bg-sky-500/20 px-3 py-1 text-xs font-medium text-sky-200">
-                Cached snapshot
-              </span>
-            ) : searchSource === 'live' ? (
-              <span className="rounded-full bg-violet-500/20 px-3 py-1 text-xs font-medium text-violet-200">
-                Live analysis
-              </span>
-            ) : null}
-          </div>
+          {resultHint ? (
+            <p className="text-sm text-slate-400">{resultHint}</p>
+          ) : null}
 
           <div
             className="rounded-xl border border-white/10 p-5 shadow-inner"
@@ -105,13 +107,23 @@ export function SearchPanel({
             ) : null}
             {typeof searchResult.article_count === 'number' ? (
               <p className="mt-1 text-sm opacity-80">
-                Articles analyzed: {searchResult.article_count}
+                Stories in this score: {searchResult.article_count}
               </p>
             ) : null}
           </div>
 
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={onAddToHeatmap}
+              className="rounded-lg border border-violet-500/50 bg-violet-600/20 px-4 py-2 text-sm font-medium text-violet-200 transition hover:bg-violet-600/30"
+            >
+              Add to heatmap
+            </button>
+          </div>
+
           <div>
-            <h3 className="text-sm font-medium text-slate-300">Recent headlines</h3>
+            <h3 className="text-sm font-medium text-slate-300">Headlines &amp; sources</h3>
             {searchResult.recent_headlines && searchResult.recent_headlines.length > 0 ? (
               <ul className="mt-2 space-y-2">
                 {searchResult.recent_headlines.map((h, i) => (
@@ -128,7 +140,7 @@ export function SearchPanel({
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">No headlines returned.</p>
+              <p className="mt-2 text-sm text-slate-500">No story links returned.</p>
             )}
           </div>
         </div>

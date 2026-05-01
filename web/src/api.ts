@@ -16,12 +16,12 @@ export async function fetchSentimentCacheList(
   url.searchParams.set('limit', String(Math.min(Math.max(limit, 1), 500)))
   const res = await fetch(url.toString(), { method: 'GET' })
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Cache list failed (${res.status}): ${text}`)
+    await res.text()
+    throw new Error(`Could not load overview (${res.status}).`)
   }
   const data: unknown = await res.json()
   if (!Array.isArray(data)) {
-    throw new Error('Cache list: expected JSON array')
+    throw new Error('Overview response was unexpected.')
   }
   return data as SentimentRow[]
 }
@@ -36,8 +36,8 @@ export async function fetchSentimentCacheSymbol(
   })
   if (res.status === 404) return null
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Cache read failed (${res.status}): ${text}`)
+    await res.text()
+    throw new Error(`Could not load this symbol (${res.status}).`)
   }
   return (await res.json()) as SentimentRow
 }

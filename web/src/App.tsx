@@ -9,7 +9,9 @@ import {
   postSentimentBySymbol,
 } from './api'
 import { Heatmap } from './components/Heatmap'
-import { SearchPanel } from './components/SearchPanel'
+import { SearchPanel, type SearchResultContext } from './components/SearchPanel'
+import { TickerDetailModal } from './components/TickerDetailModal'
+import { upsertHeatmapExtra } from './mergeHeatmapRows'
 import type { SentimentRow } from './types'
 
 const SYMBOL_RE = /^[A-Z]{1,5}$/
@@ -28,14 +30,15 @@ function getApiBase(): string {
 export default function App() {
   const apiBase = useMemo(() => getApiBase(), [])
   const [heatmapRows, setHeatmapRows] = useState<SentimentRow[]>([])
+  const [heatmapExtras, setHeatmapExtras] = useState<SentimentRow[]>([])
 
   const [query, setQuery] = useState('')
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [searchResult, setSearchResult] = useState<SentimentRow | null>(null)
-  const [searchSource, setSearchSource] = useState<
-    'heatmap' | 'cached' | 'live' | null
-  >(null)
+  const [searchSource, setSearchSource] = useState<SearchResultContext>(null)
+
+  const [detailRow, setDetailRow] = useState<SentimentRow | null>(null)
 
   const onSearch = useCallback(
     async (e: FormEvent) => {
@@ -43,19 +46,21 @@ export default function App() {
       setSearchError(null)
 
       if (!apiBase) {
-        setSearchError('Configure VITE_API_BASE_URL first.')
+        setSearchError('FinSense is not connected. Try again later.')
         return
       }
 
       const sym = normalizeTicker(query)
       if (!sym) {
-        setSearchError('Enter a valid ticker (1–5 letters, e.g. AAPL).')
+        setSearchError('Enter a valid ticker (1-5 letters, e.g. AAPL).')
         setSearchResult(null)
         setSearchSource(null)
         return
       }
 
-      const fromGrid = heatmapRows.find((r) => r.symbol === sym)
+      const fromGrid = heatmapRows.find(
+        (r) => r.symbol.toUpperCase() === sym,
+      )
       if (fromGrid) {
         setSearchResult(fromGrid)
         setSearchSource('heatmap')
@@ -68,16 +73,16 @@ export default function App() {
       setSearchSource(null)
 
       try {
-        const cached = await fetchSentimentCacheSymbol(apiBase, sym)
-        if (cached) {
-          setSearchResult(cached)
-          setSearchSource('cached')
+        const saved = await fetchSentimentCacheSymbol(apiBase, sym)
+        if (saved) {
+          setSearchResult(saved)
+          setSearchSource('saved')
           return
         }
 
-        const live = await postSentimentBySymbol(apiBase, sym)
-        setSearchResult(live)
-        setSearchSource('live')
+        const fresh = await postSentimentBySymbol(apiBase, sym)
+        setSearchResult(fresh)
+        setSearchSource('fresh')
       } catch (err: unknown) {
         setSearchError(err instanceof Error ? err.message : String(err))
         setSearchResult(null)
@@ -89,6 +94,16 @@ export default function App() {
     [apiBase, heatmapRows, query],
   )
 
+  const onAddToHeatmap = useCallback(() => {
+    if (!searchResult) return
+    setHeatmapExtras((prev) => upsertHeatmapExtra(prev, searchResult))
+  }, [searchResult])
+
+  const onDetailRowUpdate = useCallback((row: SentimentRow) => {
+    setDetailRow(row)
+    setHeatmapExtras((prev) => upsertHeatmapExtra(prev, row))
+  }, [])
+
   return (
     <div className="min-h-svh bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
@@ -97,11 +112,11 @@ export default function App() {
             FinSense
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Sentiment overview
+            Market sentiment
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-pretty text-slate-400">
-            Cached sentiment scores across your watchlist, plus on-demand lookups
-            for any symbol.
+            A live heatmap of how recent news reads for each symbol, plus search
+            for any ticker to dig into the stories behind the score.
           </p>
         </header>
 
@@ -114,21 +129,36 @@ export default function App() {
             searchLoading={searchLoading}
             searchResult={searchResult}
             searchSource={searchSource}
+            onAddToHeatmap={onAddToHeatmap}
           />
 
           <section>
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-white">Global heatmap</h2>
+                <h2 className="text-xl font-semibold text-white">Your heatmap</h2>
                 <p className="text-sm text-slate-400">
-                  Colors map score (bearish → bullish). Data from DynamoDB cache.
+                  Color shows sentiment from bearish to bullish. Click a symbol
+                  for coverage and links. Add symbols from search to keep them
+                  here.
                 </p>
               </div>
             </div>
-            <Heatmap apiBase={apiBase} onRowsChange={setHeatmapRows} />
+            <Heatmap
+              apiBase={apiBase}
+              extraRows={heatmapExtras}
+              onRowsChange={setHeatmapRows}
+              onSelectSymbol={setDetailRow}
+            />
           </section>
         </div>
       </div>
+
+      <TickerDetailModal
+        apiBase={apiBase}
+        row={detailRow}
+        onClose={() => setDetailRow(null)}
+        onRowUpdate={onDetailRowUpdate}
+      />
     </div>
   )
 }
