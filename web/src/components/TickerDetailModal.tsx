@@ -91,74 +91,78 @@ export function TickerDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-4 backdrop-blur-sm sm:items-center"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
       <div
-        className="max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 shadow-2xl"
+        className="max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto border border-white/[0.1] bg-[#080808] shadow-2xl shadow-black"
         role="dialog"
         aria-modal="true"
         aria-labelledby="ticker-detail-title"
       >
-        <div className="sticky top-0 flex items-center justify-between border-b border-slate-700/80 bg-slate-900/95 px-5 py-4 backdrop-blur">
+        <div className="sticky top-0 flex items-center justify-between border-b border-white/[0.06] bg-[#080808]/95 px-6 py-5 backdrop-blur-md">
           <h2
             id="ticker-detail-title"
-            className="font-mono text-xl font-semibold text-white"
+            className="font-mono text-lg font-semibold tracking-tight text-white"
           >
             {display.symbol}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            className="border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wider text-zinc-400 transition hover:border-white/25 hover:text-white"
           >
             Close
           </button>
         </div>
 
-        <div className="space-y-5 px-5 py-5">
-          <div
-            className="rounded-xl border border-white/10 p-5 shadow-inner"
-            style={scoreToCardStyle(display.score)}
-          >
+        <div className="space-y-8 px-6 py-8">
+          <div className="border p-6" style={scoreToCardStyle(display.score)}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="text-sm font-medium opacity-90">Sentiment</span>
-              <span className="font-mono text-3xl font-bold tabular-nums">
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
+                Sentiment
+              </span>
+              <span className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
                 {formatScore(display.score)}
               </span>
             </div>
             {display.label ? (
-              <p className="mt-2 text-sm capitalize opacity-90">{display.label}</p>
+              <p className="mt-3 text-xs font-medium uppercase tracking-wider opacity-90">
+                {display.label}
+              </p>
             ) : null}
             {typeof display.article_count === 'number' ? (
-              <p className="mt-1 text-sm opacity-80">
+              <p className="mt-2 font-mono text-xs opacity-80">
                 Stories in this score: {display.article_count}
               </p>
             ) : null}
           </div>
 
           {loading ? (
-            <div className="flex items-center gap-3 text-slate-300">
+            <div className="flex items-center gap-3 text-sm text-zinc-500">
               <div
-                className="h-7 w-7 shrink-0 animate-spin rounded-full border-2 border-violet-400 border-t-transparent"
+                className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-zinc-700 border-t-white"
                 aria-hidden
               />
-              <span>Loading related stories...</span>
+              <span>Loading related stories…</span>
             </div>
           ) : null}
 
           {error ? (
-            <p className="text-sm text-red-300" role="alert">
+            <p
+              className="border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-300"
+              role="alert"
+            >
               {error}
             </p>
           ) : null}
 
           <div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-medium text-slate-300">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
                 Related coverage
               </h3>
               {apiBase ? (
@@ -166,21 +170,21 @@ export function TickerDetailModal({
                   type="button"
                   disabled={refreshing}
                   onClick={runLatestAnalysis}
-                  className="text-xs font-medium text-violet-300 underline decoration-violet-500/40 underline-offset-2 hover:text-violet-200 disabled:opacity-50"
+                  className="font-mono text-[10px] font-medium uppercase tracking-wider text-zinc-400 underline decoration-white/20 underline-offset-4 transition hover:text-white hover:decoration-white/50 disabled:opacity-40"
                 >
-                  {refreshing ? 'Updating...' : 'Refresh from latest news'}
+                  {refreshing ? 'Updating…' : 'Refresh from latest news'}
                 </button>
               ) : null}
             </div>
             {headlines.length > 0 ? (
-              <ul className="mt-3 space-y-2.5">
+              <ul className="mt-5 space-y-3 border-l border-white/10 pl-4">
                 {headlines.map((h, i) => (
                   <li key={`${h.url}-${i}`}>
                     <a
                       href={h.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-violet-300 underline decoration-violet-500/50 underline-offset-2 transition hover:text-violet-200"
+                      className="text-sm text-zinc-300 underline decoration-white/15 underline-offset-[5px] transition hover:text-white hover:decoration-white/40"
                     >
                       {h.title || h.url}
                     </a>
@@ -188,7 +192,7 @@ export function TickerDetailModal({
                 ))}
               </ul>
             ) : !loading ? (
-              <p className="mt-3 text-sm text-slate-500">
+              <p className="mt-5 font-mono text-xs text-zinc-600">
                 No story links on file for this symbol yet. Try refreshing from
                 latest news.
               </p>

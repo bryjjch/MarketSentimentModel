@@ -37,14 +37,21 @@ export function SearchPanel({
     searchResult && !searchLoading ? contextLine(searchSource) : null
 
   return (
-    <section className="rounded-2xl border border-slate-700/60 bg-slate-900/50 p-6 text-left shadow-xl backdrop-blur">
-      <h2 className="text-lg font-semibold text-slate-100">Search tickers</h2>
-      <p className="mt-1 text-sm text-slate-400">
-        Enter a US equity symbol to see sentiment and sources. New lookups may take
-        up to about half a minute while coverage is gathered and scored.
+    <section className="border border-white/[0.08] bg-white/[0.02] p-8 text-left shadow-[0_0_0_1px_rgb(255_255_255_/_0.03)_inset] backdrop-blur-sm sm:p-10">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
+          Lookup
+        </h2>
+        <span className="font-mono text-[10px] text-zinc-600">
+          US equities · 1–5 letters
+        </span>
+      </div>
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-500">
+        Full runs can take up to about half a minute while coverage is gathered
+        and scored.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3 sm:flex-row">
+      <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-3 sm:flex-row">
         <label className="sr-only" htmlFor="ticker-search">
           Ticker symbol
         </label>
@@ -54,59 +61,64 @@ export function SearchPanel({
           inputMode="text"
           autoCapitalize="characters"
           autoComplete="off"
-          placeholder="e.g. AAPL"
+          placeholder="AAPL"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          className="min-h-11 flex-1 rounded-lg border border-slate-600 bg-slate-950/80 px-4 font-mono text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+          className="min-h-12 flex-1 border border-white/10 bg-black/50 px-4 font-mono text-sm text-white placeholder:text-zinc-600 focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/20"
         />
         <button
           type="submit"
           disabled={searchLoading}
-          className="min-h-11 rounded-lg bg-violet-600 px-6 font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-h-12 shrink-0 border border-white bg-white px-8 font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:border-white/20 disabled:bg-zinc-600 disabled:text-zinc-400"
         >
-          {searchLoading ? 'Working...' : 'Search'}
+          {searchLoading ? 'Running…' : 'Search'}
         </button>
       </form>
 
       {searchError ? (
-        <p className="mt-4 text-sm text-red-300" role="alert">
+        <p
+          className="mt-6 border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-300"
+          role="alert"
+        >
           {searchError}
         </p>
       ) : null}
 
       {searchLoading ? (
-        <div className="mt-6 flex items-center gap-3 text-slate-300">
+        <div className="mt-8 flex items-center gap-4 text-sm text-zinc-400">
           <div
-            className="h-8 w-8 shrink-0 animate-spin rounded-full border-2 border-violet-400 border-t-transparent"
+            className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-zinc-700 border-t-white"
             aria-hidden
           />
-          <span>Gathering recent headlines and running sentiment...</span>
+          <span>Gathering headlines and scoring…</span>
         </div>
       ) : null}
 
       {searchResult && !searchLoading ? (
-        <div className="mt-6 space-y-4">
+        <div className="mt-10 space-y-8 border-t border-white/[0.06] pt-10">
           {resultHint ? (
-            <p className="text-sm text-slate-400">{resultHint}</p>
+            <p className="font-mono text-xs text-zinc-500">{resultHint}</p>
           ) : null}
 
           <div
-            className="rounded-xl border border-white/10 p-5 shadow-inner"
+            className="border p-6 sm:p-8"
             style={scoreToCardStyle(searchResult.score)}
           >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="font-mono text-2xl font-bold tracking-tight">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <span className="font-mono text-2xl font-semibold tracking-tight">
                 {searchResult.symbol}
               </span>
-              <span className="font-mono text-3xl font-bold tabular-nums">
+              <span className="font-mono text-4xl font-semibold tabular-nums tracking-tight">
                 {formatScore(searchResult.score)}
               </span>
             </div>
             {searchResult.label ? (
-              <p className="mt-2 text-sm capitalize opacity-90">{searchResult.label}</p>
+              <p className="mt-3 text-xs font-medium uppercase tracking-wider opacity-90">
+                {searchResult.label}
+              </p>
             ) : null}
             {typeof searchResult.article_count === 'number' ? (
-              <p className="mt-1 text-sm opacity-80">
+              <p className="mt-2 font-mono text-xs opacity-80">
                 Stories in this score: {searchResult.article_count}
               </p>
             ) : null}
@@ -116,23 +128,25 @@ export function SearchPanel({
             <button
               type="button"
               onClick={onAddToHeatmap}
-              className="rounded-lg border border-violet-500/50 bg-violet-600/20 px-4 py-2 text-sm font-medium text-violet-200 transition hover:bg-violet-600/30"
+              className="border border-white/20 bg-transparent px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white transition hover:border-white/40 hover:bg-white/[0.04]"
             >
               Add to heatmap
             </button>
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-slate-300">Headlines &amp; sources</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              Headlines &amp; sources
+            </h3>
             {searchResult.recent_headlines && searchResult.recent_headlines.length > 0 ? (
-              <ul className="mt-2 space-y-2">
+              <ul className="mt-4 space-y-3 border-l border-white/10 pl-4">
                 {searchResult.recent_headlines.map((h, i) => (
                   <li key={`${h.url}-${i}`}>
                     <a
                       href={h.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-violet-300 underline decoration-violet-500/50 underline-offset-2 transition hover:text-violet-200"
+                      className="text-sm text-zinc-300 underline decoration-white/20 underline-offset-[5px] transition hover:text-white hover:decoration-white/50"
                     >
                       {h.title || h.url}
                     </a>
@@ -140,7 +154,9 @@ export function SearchPanel({
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">No story links returned.</p>
+              <p className="mt-4 font-mono text-xs text-zinc-600">
+                No story links returned.
+              </p>
             )}
           </div>
         </div>

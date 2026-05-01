@@ -105,22 +105,34 @@ export default function App() {
   }, [])
 
   return (
-    <div className="min-h-svh bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-        <header className="text-center">
-          <p className="text-sm font-medium uppercase tracking-widest text-violet-400/90">
-            FinSense
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Market sentiment
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-pretty text-slate-400">
-            A live heatmap of how recent news reads for each symbol, plus search
-            for any ticker to dig into the stories behind the score.
-          </p>
+    <div className="min-h-svh text-zinc-100">
+      <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12">
+        <header className="border-b border-white/[0.06] pb-12 text-left sm:pb-14">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl space-y-4">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.35em] text-zinc-500">
+                FinSense
+              </p>
+              <h1 className="text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-5xl">
+                Market sentiment
+              </h1>
+              <p className="max-w-xl text-pretty text-base leading-relaxed text-zinc-500">
+                News-driven scores per symbol, distilled into a monochrome
+                overview. Search any ticker or open a tile for sources.
+              </p>
+            </div>
+            <div className="hidden shrink-0 font-mono text-[10px] leading-relaxed text-zinc-600 sm:block sm:text-right">
+              <div className="border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+                <div className="text-zinc-500">Signal</div>
+                <div className="mt-1 text-zinc-400">Score −1 … +1</div>
+                <div className="mt-2 text-zinc-600">Darker → bearish</div>
+                <div className="text-zinc-600">Lighter → bullish</div>
+              </div>
+            </div>
+          </div>
         </header>
 
-        <div className="mt-10 space-y-12">
+        <div className="mt-14 space-y-16 sm:mt-16 sm:space-y-20">
           <SearchPanel
             query={query}
             onQueryChange={setQuery}
@@ -133,13 +145,18 @@ export default function App() {
           />
 
           <section>
-            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-white">Your heatmap</h2>
-                <p className="text-sm text-slate-400">
-                  Color shows sentiment from bearish to bullish. Click a symbol
-                  for coverage and links. Add symbols from search to keep them
-                  here.
+                <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
+                  Overview
+                </h2>
+                <p className="mt-2 max-w-lg text-2xl font-semibold tracking-tight text-white">
+                  Heatmap
+                </p>
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-500">
+                  Tiles encode sentiment in grayscale. Open a symbol for
+                  headlines and refresh. Add from search to pin extras on the
+                  grid.
                 </p>
               </div>
             </div>

@@ -1,7 +1,26 @@
 @import 'tailwindcss';
 
+@theme {
+  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
 body {
   margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #030303;
+  color: #fafafa;
+  background-image:
+    radial-gradient(ellipse 100% 80% at 50% -30%, rgb(255 255 255 / 0.06), transparent 55%),
+    linear-gradient(rgb(255 255 255 / 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.02) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    48px 48px,
+    48px 48px;
+  background-attachment: fixed;
 }
 
 #root {
