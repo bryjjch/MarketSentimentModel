@@ -25,8 +25,7 @@ sagemaker_serverless_max_concurrency   = 10
 # lambda_reserved_concurrent_executions = 5
 #
 # Sentiment orchestration + DynamoDB cache (optional):
-# finnhub_secret_arn            = "arn:aws:secretsmanager:region:account:secret:name"
-#   Secret JSON: {"api_key":"YOUR_FINNHUB_TOKEN"} — symbol-keyed company news (recommended).
+# reddit_credentials_secret_arn = "arn:aws:secretsmanager:region:account:secret:name"
 # sentiment_cache_ttl_seconds     = 604800
 # top_tickers_json                = "[\"AAPL\",\"MSFT\",\"GOOGL\"]"
 #
@@ -35,6 +34,7 @@ sagemaker_serverless_max_concurrency   = 10
 # data_retention_days           = 90
 # ingestion_schedule            = "cron(0 13 * * ? *)"
 # ingestion_max_articles        = 20
+# ingestion_include_social      = true
 # sagemaker_batch_size          = 32
 # low_conf_top_prob             = 0.65
 # low_conf_margin               = 0.0

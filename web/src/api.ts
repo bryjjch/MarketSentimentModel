@@ -52,7 +52,7 @@ export async function postSentimentBySymbol(
     headers: JSON_HEADERS,
     body: JSON.stringify({
       symbol,
-      options: { max_articles: 12 },
+      options: { max_articles: 12, include_social: true },
     }),
   })
   if (!res.ok) {

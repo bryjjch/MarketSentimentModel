@@ -299,7 +299,7 @@ def test_api_sentiment_by_symbol_success_writes_cache_row(monkeypatch: pytest.Mo
     monkeypatch.setattr(
         handler,
         "collect_for_symbol",
-        lambda symbol, max_articles: [
+        lambda symbol, max_articles, include_social: [
             CollectedItem(
                 title="Strong quarter",
                 url="http://example.com/news",
@@ -309,7 +309,7 @@ def test_api_sentiment_by_symbol_success_writes_cache_row(monkeypatch: pytest.Mo
         ],
     )
 
-    out = handler.run_sentiment("AAPL", {"max_articles": 5})
+    out = handler.run_sentiment("AAPL", {"max_articles": 5, "include_social": False})
     assert out.get("error") is None
     assert out["symbol"] == "AAPL"
     assert fake_ddb.table_obj.items, "expected a cache row"
@@ -357,7 +357,7 @@ def test_api_sentiment_by_symbol_error_does_not_write_cache(monkeypatch: pytest.
     monkeypatch.setattr(
         handler,
         "collect_for_symbol",
-        lambda symbol, max_articles: [
+        lambda symbol, max_articles, include_social: [
             CollectedItem(
                 title="Mixed outlook",
                 url="http://example.com/mixed",
@@ -367,7 +367,7 @@ def test_api_sentiment_by_symbol_error_does_not_write_cache(monkeypatch: pytest.
         ],
     )
 
-    out = handler.run_sentiment("AAPL", {"max_articles": 5})
+    out = handler.run_sentiment("AAPL", {"max_articles": 5, "include_social": False})
     assert out["error"] == "invalid_sagemaker_shape"
     assert fake_ddb.table_obj.items == []
 

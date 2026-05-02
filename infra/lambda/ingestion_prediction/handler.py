@@ -11,9 +11,9 @@ Invocation payload (from the ingestion Lambda)::
     }
 
 Outputs:
-  * ``predictions/dt=.../symbol=.../<run_id>.jsonl`` - one row per input text with model
+  * ``predictions/dt=.../symbol=.../<run_id>.jsonl`` — one row per input text with model
     probabilities + confidence metric.
-  * ``curated/dt=.../symbol=.../<run_id>.jsonl`` - **high-confidence** rows only (model
+  * ``curated/dt=.../symbol=.../<run_id>.jsonl`` — **high-confidence** rows only (model
     label trusted) so downstream training has immediate labeled data.
   * Async fan-out to the pseudo-label Lambda with the list of **low-confidence** row
     indices. That Lambda will emit ``pseudo/`` + merge into ``curated/`` with LLM labels.
