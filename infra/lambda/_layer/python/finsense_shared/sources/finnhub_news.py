@@ -20,9 +20,21 @@ logger = logging.getLogger(__name__)
 _FINNHUB_COMPANY_NEWS = "https://finnhub.io/api/v1/company-news"
 _TAG_RE = re.compile(r"<[^>]+>")
 
+# Cache one resolved key per Lambda execution environment (single Secrets Manager read per
+# warm container; ``_collect_news_slot`` passes the key into ``collect_finnhub_news`` to
+# skip a second lookup).
+_cached_fp: str | None = None
 
-def _load_api_key() -> str | None:
-    """Resolve API key: ``FINNHUB_API_KEY`` env, else JSON in Secrets Manager (``FINNHUB_SECRET_ARN``)."""
+
+def _finnhub_env_fingerprint() -> str:
+    return (
+        f"{os.environ.get('FINNHUB_API_KEY', '')}\0"
+        f"{os.environ.get('FINNHUB_SECRET_ARN', '')}"
+    )
+
+
+def _resolve_finnhub_api_key_uncached() -> str | None:
+    """Read API key from env or Secrets Manager (no caching)."""
     direct = os.environ.get("FINNHUB_API_KEY", "").strip()
     if direct:
         return direct
@@ -50,9 +62,32 @@ def _load_api_key() -> str | None:
     return None
 
 
+_MISSING = object()
+_cached_key: str | None | object = _MISSING
+
+
+def get_finnhub_api_key() -> str | None:
+    """Return Finnhub API key once per env configuration (cached across symbols in one invocation)."""
+    global _cached_fp, _cached_key
+    fp = _finnhub_env_fingerprint()
+    if _cached_key is not _MISSING and fp == _cached_fp:
+        return _cached_key  # type: ignore[return-value]
+    _cached_fp = fp
+    key = _resolve_finnhub_api_key_uncached()
+    _cached_key = key
+    return key
+
+
 def finnhub_news_enabled() -> bool:
     """True when Finnhub API key is available (env or Secrets Manager)."""
-    return bool(_load_api_key())
+    return bool(get_finnhub_api_key())
+
+
+def clear_finnhub_api_key_cache_for_tests() -> None:
+    """Reset module cache (tests only)."""
+    global _cached_fp, _cached_key
+    _cached_fp = None
+    _cached_key = _MISSING
 
 
 def _strip_html(s: str) -> str:
@@ -111,12 +146,20 @@ def _fetch_company_news(
     return [x for x in data if isinstance(x, dict)]
 
 
-def collect_finnhub_news(symbol: str, *, max_items: int) -> list[CollectedItem]:
+def collect_finnhub_news(
+    symbol: str,
+    *,
+    max_items: int,
+    api_key: str | None = None,
+) -> list[CollectedItem]:
     """Return company news articles from Finnhub keyed to ``symbol`` (up to ``max_items``).
+
+    Pass ``api_key`` from :func:`get_finnhub_api_key` when resolving once per batch to avoid
+    a second cache lookup. When ``api_key`` is omitted, resolves via :func:`get_finnhub_api_key`.
 
     Empty list if no API key, HTTP/JSON failure, or no articles in range.
     """
-    token = _load_api_key()
+    token = api_key if api_key is not None else get_finnhub_api_key()
     if not token:
         return []
 

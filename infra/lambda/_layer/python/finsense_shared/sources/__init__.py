@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from .base import CollectedItem
-from .finnhub_news import collect_finnhub_news, finnhub_news_enabled
+from .finnhub_news import collect_finnhub_news, finnhub_news_enabled, get_finnhub_api_key
 from .news_rss import collect_news_rss
 
 
@@ -19,10 +19,11 @@ def _finnhub_fallback_rss_enabled() -> bool:
 
 def _collect_news_slot(symbol: str, n_news: int) -> list[CollectedItem]:
     """Prefer Finnhub symbol-keyed company news when configured; optionally backfill with RSS."""
-    if not finnhub_news_enabled():
+    api_key = get_finnhub_api_key()
+    if not api_key:
         return collect_news_rss(symbol, max_items=n_news)
 
-    finnhub_items = collect_finnhub_news(symbol, max_items=n_news)
+    finnhub_items = collect_finnhub_news(symbol, max_items=n_news, api_key=api_key)
     if len(finnhub_items) >= n_news:
         return finnhub_items[:n_news]
 
@@ -78,5 +79,6 @@ __all__ = [
     "collect_for_symbol",
     "collect_finnhub_news",
     "finnhub_news_enabled",
+    "get_finnhub_api_key",
     "collect_news_rss",
 ]

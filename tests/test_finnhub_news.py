@@ -4,16 +4,46 @@ from __future__ import annotations
 
 import json
 
+import boto3
 import pytest
 
 from finsense_shared.sources.base import CollectedItem
-from finsense_shared.sources.finnhub_news import collect_finnhub_news, finnhub_news_enabled
+from finsense_shared.sources.finnhub_news import (
+    clear_finnhub_api_key_cache_for_tests,
+    collect_finnhub_news,
+    finnhub_news_enabled,
+    get_finnhub_api_key,
+)
 
 
 def test_finnhub_news_enabled_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_finnhub_api_key_cache_for_tests()
     monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
     monkeypatch.delenv("FINNHUB_SECRET_ARN", raising=False)
     assert finnhub_news_enabled() is False
+
+
+def test_finnhub_api_key_secrets_manager_called_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_finnhub_api_key_cache_for_tests()
+    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
+    monkeypatch.setenv("FINNHUB_SECRET_ARN", "arn:aws:secretsmanager:us-east-1:0:secret:test")
+    calls: list[int] = []
+
+    class FakeSM:
+        def get_secret_value(self, **kwargs: object) -> dict[str, str]:
+            calls.append(1)
+            return {"SecretString": '{"api_key":"one-read"}'}
+
+    def fake_boto_client(name: str, **kwargs: object) -> FakeSM:
+        assert name == "secretsmanager"
+        return FakeSM()
+
+    monkeypatch.setattr(boto3, "client", fake_boto_client)
+
+    assert get_finnhub_api_key() == "one-read"
+    assert get_finnhub_api_key() == "one-read"
+    assert finnhub_news_enabled() is True
+    assert len(calls) == 1
 
 
 def test_collect_finnhub_filters_by_related_and_sorts(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -71,7 +101,7 @@ def test_collect_finnhub_filters_by_related_and_sorts(monkeypatch: pytest.Monkey
 def test_collect_for_symbol_skips_rss_when_finnhub_fills_quota(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FINNHUB_API_KEY", "x")
 
-    def fake_finnhub(symbol: str, *, max_items: int) -> list[CollectedItem]:
+    def fake_finnhub(symbol: str, *, max_items: int, api_key: str | None = None) -> list[CollectedItem]:
         return [
             CollectedItem(
                 title="t",
