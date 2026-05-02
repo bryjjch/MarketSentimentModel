@@ -33,6 +33,7 @@ resource "aws_lambda_function" "api_sentiment_by_symbol" {
       VALID_TICKERS_JSON      = var.valid_tickers_json
       VALID_TICKERS_FILE      = var.valid_tickers_file
       VALID_TICKERS_CACHE_TTL_SECONDS = tostring(var.valid_tickers_cache_ttl_seconds)
+      RSS_OVERFETCH                   = tostring(var.rss_overfetch)
     }
   }
 
