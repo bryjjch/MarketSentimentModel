@@ -79,9 +79,9 @@ variable "s3_force_destroy" {
   default     = false
 }
 
-variable "reddit_credentials_secret_arn" {
+variable "finnhub_secret_arn" {
   type        = string
-  description = "Optional Secrets Manager ARN; secret must be JSON {\"client_id\":\"...\",\"client_secret\":\"...\"} for Reddit API (include_social). Leave empty to disable Reddit."
+  description = "Optional Secrets Manager ARN; secret JSON {\"api_key\":\"...\"} (or plain string) for Finnhub company news (symbol-keyed). Leave empty to use Google News RSS only."
   default     = ""
 }
 
@@ -151,12 +151,6 @@ variable "ingestion_max_articles" {
   type        = number
   description = "Max articles per ticker during daily ingestion."
   default     = 20
-}
-
-variable "ingestion_include_social" {
-  type        = bool
-  description = "Whether daily ingestion should include Reddit (requires reddit_credentials_secret_arn)."
-  default     = true
 }
 
 variable "sagemaker_batch_size" {

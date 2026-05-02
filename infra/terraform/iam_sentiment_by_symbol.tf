@@ -43,19 +43,17 @@ resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_cache_write" {
 }
 
 resource "aws_iam_role_policy" "api_sentiment_by_symbol_lambda_secrets" {
-  count = var.reddit_credentials_secret_arn != "" ? 1 : 0
-  name  = "${var.project_name}-api-sentiment-by-symbol-read-reddit-secret"
+  count = length(local.provider_secret_arns) > 0 ? 1 : 0
+  name  = "${var.project_name}-api-sentiment-by-symbol-read-provider-secrets"
   role  = aws_iam_role.api_sentiment_by_symbol_lambda.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = ["secretsmanager:GetSecretValue"]
-        Resource = [
-          var.reddit_credentials_secret_arn,
-        ]
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = local.provider_secret_arns
       },
     ]
   })

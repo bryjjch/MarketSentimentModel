@@ -1,4 +1,4 @@
-"""Daily ingestion Lambda: for each ticker, collect raw news/social texts and write them to S3.
+"""Daily ingestion Lambda: for each ticker, collect raw news texts and write them to S3.
 
 Invocation modes:
   1. EventBridge daily cron with no payload -> enumerates tickers from SSM and fans out to
@@ -35,23 +35,8 @@ logger.setLevel(logging.INFO)
 DATA_BUCKET = os.environ["DATA_BUCKET"]
 INGESTION_PREDICTION_FUNCTION_NAME = os.environ.get("INGESTION_PREDICTION_FUNCTION_NAME", "").strip()
 DEFAULT_MAX_ARTICLES = int(os.environ.get("DEFAULT_MAX_ARTICLES", "20"))
-INCLUDE_SOCIAL = os.environ.get("INCLUDE_SOCIAL", "true").lower() not in ("0", "false", "no")
 
 _lambda = boto3.client("lambda")
-
-
-def _parse_bool(value: Any, default: bool) -> bool:
-    """Return a bool from *value*, applying the same rules as the env-var parsing above.
-
-    Accepts actual JSON booleans unchanged.  String values are treated case-insensitively:
-    ``"0"``, ``"false"``, and ``"no"`` are falsy; everything else is truthy.
-    Falls back to *default* when *value* is ``None``.
-    """
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    return str(value).lower() not in ("0", "false", "no")
 
 
 def _now_ts() -> int:
@@ -62,12 +47,11 @@ def _dt_date() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
 
-def _ingest_symbol(symbol: str, run_id: str, max_articles: int, include_social: bool) -> dict[str, Any]:
+def _ingest_symbol(symbol: str, run_id: str, max_articles: int) -> dict[str, Any]:
     """Collect raw items for one ticker and write them to ``raw/dt=.../symbol=.../run_id.jsonl``."""
     items = collect_for_symbol(
         symbol,
         max_articles=max_articles,
-        include_social=include_social,
     )
     kept = [it for it in items if (it.text or "").strip()]
     key = raw_key(symbol, run_id)
@@ -124,7 +108,6 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     opts = event.get("options") if isinstance(event, dict) and isinstance(event.get("options"), dict) else {}
     max_articles = int(opts.get("max_articles", DEFAULT_MAX_ARTICLES))
     max_articles = max(1, min(max_articles, 40))
-    include_social = _parse_bool(opts.get("include_social"), INCLUDE_SOCIAL)
     run_id = str(event.get("run_id") or "") if isinstance(event, dict) else ""
     run_id = run_id or f"{_dt_date()}-{uuid.uuid4().hex[:8]}"
 
@@ -132,7 +115,7 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         sym = normalize_symbol(str(raw_sym))
         if not sym:
             return {"error": "invalid_symbol"}
-        result = _ingest_symbol(sym, run_id, max_articles, include_social)
+        result = _ingest_symbol(sym, run_id, max_articles)
         dispatch = _fan_out_to_prediction([result])
         return {"run_id": run_id, "symbols": 1, **dispatch, "results": [result]}
 
@@ -140,7 +123,7 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     for sym in tickers:
         try:
-            results.append(_ingest_symbol(sym, run_id, max_articles, include_social))
+            results.append(_ingest_symbol(sym, run_id, max_articles))
         except Exception as e:  # noqa: BLE001 -- one bad symbol shouldn't kill the batch
             logger.exception("ingest_failed %s: %s", sym, e)
             results.append({"symbol": sym, "run_id": run_id, "count": 0, "error": str(e)})

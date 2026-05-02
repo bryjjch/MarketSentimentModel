@@ -2,7 +2,7 @@
 
 This folder implements the AWS infrastructure for the Finsense pipeline. Training runs on **SageMaker** and writes a deploy-ready artifact directly (weights + tokenizer + `code/inference.py`) to `SM_MODEL_DIR`, which SageMaker auto-packs into `model.tar.gz` at job end. Terraform wires that tarball into a **SageMaker Serverless Inference** endpoint with the **Hugging Face inference DLC**, fronted by an **HTTP API** (API Gateway v2) plus a **Lambda** that calls `InvokeEndpoint`.
 
-A second **daily ingestion pipeline** (EventBridge → ingestion Lambda → ingestion-prediction Lambda → pseudo-label Lambda) writes raw news/social text, model predictions, low-confidence pseudo-labels, and curated training rows to a **separate data bucket** partitioned by `dt=YYYY-MM-DD/symbol=SYM/…`. See [§7](#7-daily-ingestion--provider-agnostic-pseudo-labeling).
+A second **daily ingestion pipeline** (EventBridge → ingestion Lambda → ingestion-prediction Lambda → pseudo-label Lambda) writes raw news text, model predictions, low-confidence pseudo-labels, and curated training rows to a **separate data bucket** partitioned by `dt=YYYY-MM-DD/symbol=SYM/…`. See [§7](#7-daily-ingestion--provider-agnostic-pseudo-labeling).
 
 ## Layout
 
@@ -10,9 +10,9 @@ A second **daily ingestion pipeline** (EventBridge → ingestion Lambda → inge
 |------|---------|
 | [`sagemaker/serving/code/inference.py`](sagemaker/serving/code/inference.py) | SageMaker `model_fn` / `input_fn` / `predict_fn` / `output_fn`; mirrors train/serve behavior from `training.inference` (max length 175, empty-text handling). Copied into `<output_dir>/code/` by the classifier training script so the SageMaker-produced `model.tar.gz` is serving-ready. |
 | [`lambda/api_inference/handler.py`](lambda/api_inference/handler.py) | Lambda proxy: forwards JSON body to SageMaker runtime (raw text only). |
-| [`lambda/api_sentiment_by_symbol/`](lambda/api_sentiment_by_symbol/) | Orchestration: resolve symbol, collect news (RSS) and optional Reddit posts, batch `invoke_endpoint`, aggregate scores. |
+| [`lambda/api_sentiment_by_symbol/`](lambda/api_sentiment_by_symbol/) | Orchestration: resolve symbol, collect news (**Finnhub** symbol-keyed company news when `finnhub_secret_arn` is set; else Google News RSS), batch `invoke_endpoint`, aggregate scores. |
 | [`lambda/cache_read/handler.py`](lambda/cache_read/handler.py) | Reads precomputed per-symbol rows from DynamoDB (`GET /sentiment/cache/{symbol}`). |
-| [`lambda/ingestion/handler.py`](lambda/ingestion/handler.py) | **Daily ingestion** Lambda: EventBridge fan-out that collects raw news/social text per ticker and writes it to `raw/` in the data bucket, then async-invokes the prediction Lambda per symbol. |
+| [`lambda/ingestion/handler.py`](lambda/ingestion/handler.py) | **Daily ingestion** Lambda: EventBridge fan-out that collects raw news text per ticker and writes it to `raw/` in the data bucket, then async-invokes the prediction Lambda per symbol. |
 | [`lambda/ingestion_prediction/handler.py`](lambda/ingestion_prediction/handler.py) | Reads one `raw/` partition, runs SageMaker in batches, writes per-text rows to `predictions/`, writes high-confidence rows to `curated/`, fans low-confidence rows out to the pseudo-label Lambda, and refreshes the DynamoDB `sentiment_cache` row used by the existing read API. |
 | [`lambda/pseudo_label/handler.py`](lambda/pseudo_label/handler.py) | Provider-agnostic LLM labeler (`openai`, `google`, or offline `echo`). Writes `pseudo/` rows and merges newly-labeled rows into `curated/` with `source=pseudo`. |
 | [`lambda/_layer/python/finsense_shared/`](lambda/_layer/python/finsense_shared/) | Shared Lambda code layer: source adapters, S3 I/O, SageMaker batch invoker, confidence math, Hive-style key helpers, and LLM labeling logic. |
@@ -126,7 +126,7 @@ Body formats supported by the SageMaker handler match [`inference.py`](sagemaker
 A separate **orchestration Lambda** (`lambda/api_sentiment_by_symbol/`) implements `POST /sentiment/by-symbol` on the same HTTP API. It:
 
 1. Normalizes the ticker (uppercase, 1–5 letters).
-2. Collects text via **source adapters**: Google News RSS (no API key) and, if `options.include_social` is true (default), **Reddit** via the official API when credentials are configured.
+2. Collects text via **source adapters**: **Finnhub** company news when `finnhub_secret_arn` is set (symbol-keyed), otherwise Google News RSS (no API key).
 3. Calls **SageMaker** with `{"texts":[...]}` (same contract as [`inference.py`](sagemaker/serving/code/inference.py)) using `boto3` `invoke_endpoint`—not the `POST /predict` route.
 4. Aggregates per-text probabilities into `score` (mean of positive minus negative probability mass per article), `label` (`positive` / `neutral` / `negative`), `article_count`, and `recent_headlines` (title + URL pairs; length capped by `RECENT_HEADLINES_MAX`, default 10).
 
@@ -135,10 +135,10 @@ A separate **orchestration Lambda** (`lambda/api_sentiment_by_symbol/`) implemen
 ```bash
 curl -sS -X POST "$(terraform output -raw sentiment_by_symbol_url)" \
   -H "Content-Type: application/json" \
-  -d '{"symbol":"AAPL","options":{"max_articles":12,"include_social":true}}'
+  -d '{"symbol":"AAPL","options":{"max_articles":12}}'
 ```
 
-**Reddit (optional):** Create a Secrets Manager secret with JSON `{"client_id":"...","client_secret":"..."}` and set `reddit_credentials_secret_arn` in `terraform.tfvars`. If unset or empty, Reddit is skipped and only news RSS is used.
+**Finnhub (recommended):** Set `finnhub_secret_arn` in `terraform.tfvars` to a Secrets Manager secret containing JSON `{"api_key":"..."}` for symbol-keyed company news. If unset, only Google News RSS is used.
 
 **API Gateway timeout:** HTTP API integrations are limited to about **30 seconds**. Keep `max_articles` modest so RSS fetch + SageMaker stay within that window; if you need heavier scraping, move work to an async pattern (e.g. SQS + worker) or raise caps only in offline jobs.
 
@@ -178,7 +178,7 @@ The pipeline writes Hive-partitioned JSON Lines:
 
 ```
 s3://<data-bucket>/
-  raw/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl         # titles/URLs/snippets from RSS+Reddit
+  raw/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl         # titles/URLs/snippets from Finnhub / RSS
   predictions/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl # rows + probabilities + confidence
   pseudo/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl      # LLM labels for low-confidence rows
   curated/dt=YYYY-MM-DD/symbol=AAPL/<run_id>.jsonl         # high-conf model labels (source=model)
