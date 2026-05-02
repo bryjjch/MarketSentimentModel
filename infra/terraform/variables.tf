@@ -91,6 +91,12 @@ variable "sentiment_cache_ttl_seconds" {
   default     = 604800
 }
 
+variable "rss_overfetch" {
+  type        = number
+  description = "Multiplier applied to max_articles when fetching Google News RSS, so post-filtering can drop noise without starving the result set. Hard-capped to 60 inside the Lambda."
+  default     = 3
+}
+
 variable "sentiment_cache_api_ttl_seconds" {
   type        = number
   description = "Unix seconds added to API by-symbol write-back time for DynamoDB expires_at."
