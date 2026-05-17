@@ -4,12 +4,15 @@ import {
   useState,
   type FormEvent,
 } from 'react'
+import { Button } from 'primereact/button'
 import {
   fetchTickerSuggestions,
   fetchSentimentCacheSymbol,
   postSentimentBySymbol,
 } from './api'
+import { DashboardLayout } from './components/DashboardLayout'
 import { Heatmap } from './components/Heatmap'
+import { KpiCards } from './components/KpiCards'
 import { SearchPanel, type SearchResultContext } from './components/SearchPanel'
 import { TickerDetailModal } from './components/TickerDetailModal'
 import { upsertHeatmapExtra } from './mergeHeatmapRows'
@@ -42,6 +45,7 @@ export default function App() {
   const [suggestionLoading, setSuggestionLoading] = useState(false)
 
   const [detailRow, setDetailRow] = useState<SentimentRow | null>(null)
+  const [activeNav, setActiveNav] = useState('overview')
 
   const runSearch = useCallback(
     async (rawQuery: string) => {
@@ -147,74 +151,71 @@ export default function App() {
     setDetailRow(null)
   }, [])
 
+  const headerRight = (
+    <Button
+      icon="pi pi-bell"
+      rounded
+      text
+      severity="secondary"
+      aria-label="Notifications"
+    />
+  )
+
   return (
-    <div className="min-h-svh text-zinc-100">
-      <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12">
-        <header className="border-b border-white/[0.06] pb-12 text-left sm:pb-14">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between fs-rise">
-            <div className="max-w-2xl space-y-4">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.35em] text-zinc-500">
-                FinSense
+    <DashboardLayout
+      active={activeNav}
+      onNavigate={setActiveNav}
+      headerRight={headerRight}
+    >
+      <div className="space-y-6">
+        <section className="fs-rise">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-fs-text-subtle)]">
+                Overview
               </p>
-              <h1 className="text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-5xl">
-                Market Sentiment
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[color:var(--color-fs-text)] sm:text-3xl">
+                Market Sentiment Today
               </h1>
-              <p className="max-w-xl text-pretty text-base leading-relaxed text-zinc-500">
-                News-driven scores per symbol. Search any ticker or open a tile
-                for sources.
+              <p className="mt-1 max-w-2xl text-sm text-[color:var(--color-fs-text-subtle)]">
+                News-driven sentiment scores per symbol. Search any ticker or open a
+                tile for sources.
               </p>
-            </div>
-            <div className="hidden shrink-0 font-mono text-[10px] leading-relaxed text-zinc-600 sm:block sm:text-right">
-              <div className="border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-                <div className="text-zinc-500">Signal</div>
-                <div className="mt-1 text-zinc-400">Score −1 … +1</div>
-                <div className="mt-2 text-zinc-600">Darker → bearish</div>
-                <div className="text-zinc-600">Lighter → bullish</div>
-              </div>
             </div>
           </div>
-        </header>
 
-        <div className="mt-14 space-y-16 sm:mt-16 sm:space-y-20">
-          <SearchPanel
-            className="fs-rise fs-rise-delay-2"
-            query={query}
-            onQueryChange={setQuery}
-            onSubmit={onSearch}
-            onSuggestionRequest={onSuggestionRequest}
-            onSuggestionSelect={onSuggestionSelect}
-            searchError={searchError}
-            searchLoading={searchLoading}
-            suggestionLoading={suggestionLoading}
-            suggestions={suggestions}
-            searchResult={searchResult}
-            searchSource={searchSource}
-            onAddToHeatmap={onAddToHeatmap}
-          />
+          <div className="mt-5">
+            <KpiCards rows={heatmapRows} />
+          </div>
+        </section>
 
-          <section className="fs-rise fs-rise-delay-3">
-            <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
-                  Overview
-                </h2>
-                <p className="mt-2 max-w-lg text-2xl font-semibold tracking-tight text-white">
-                  Heatmap
-                </p>
-                <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-500">
-                  Open a symbol for headlines and refresh. Search to add more to
-                  the grid.
-                </p>
-              </div>
-            </div>
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+          <div className="xl:col-span-3">
             <Heatmap
               apiBase={apiBase}
               extraRows={heatmapExtras}
               onRowsChange={setHeatmapRows}
               onSelectSymbol={setDetailRow}
             />
-          </section>
-        </div>
+          </div>
+          <div className="xl:col-span-2">
+            <SearchPanel
+              className="fs-rise-delay-2"
+              query={query}
+              onQueryChange={setQuery}
+              onSubmit={onSearch}
+              onSuggestionRequest={onSuggestionRequest}
+              onSuggestionSelect={onSuggestionSelect}
+              searchError={searchError}
+              searchLoading={searchLoading}
+              suggestionLoading={suggestionLoading}
+              suggestions={suggestions}
+              searchResult={searchResult}
+              searchSource={searchSource}
+              onAddToHeatmap={onAddToHeatmap}
+            />
+          </div>
+        </section>
       </div>
 
       <TickerDetailModal
@@ -223,6 +224,6 @@ export default function App() {
         onClose={onDetailModalClose}
         onRowUpdate={onDetailRowUpdate}
       />
-    </div>
+    </DashboardLayout>
   )
 }
