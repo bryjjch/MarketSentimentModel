@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Card } from 'primereact/card'
+import { Message } from 'primereact/message'
+import { Skeleton } from 'primereact/skeleton'
 import {
   fetchSentimentCacheSymbol,
   postSentimentBySymbol,
@@ -7,7 +10,7 @@ import { DEFAULT_HEATMAP_SYMBOLS } from '../defaultHeatmapSymbols'
 import { formatScore } from '../formatScore'
 import { mergeHeatmapRows } from '../mergeHeatmapRows'
 import type { SentimentRow } from '../types'
-import { scoreToCardStyle } from '../scoreColor'
+import { scoreToAccent, scoreToCardStyle } from '../scoreColor'
 
 async function loadDefaultHeatmapRows(
   baseUrl: string,
@@ -93,78 +96,109 @@ export function Heatmap({
     }
   }, [apiBase])
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[220px] flex-col items-center justify-center gap-5 border border-white/[0.06] bg-white/[0.02] px-6 py-20 fs-result-reveal">
-        <div
-          className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-white"
-          aria-hidden
-        />
-        <span className="sr-only">Loading heatmap</span>
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600">
-          Loading overview
-        </p>
-      </div>
-    )
-  }
-
-  if (error && mergedRows.length === 0) {
-    return (
-      <div className="border border-white/15 bg-black/50 px-6 py-8 text-left fs-result-reveal">
-        <p className="font-medium text-white">Could not load the overview</p>
-        <p className="mt-2 font-mono text-xs leading-relaxed text-zinc-400">
-          {error}
-        </p>
-      </div>
-    )
-  }
-
-  if (mergedRows.length === 0) {
-    return (
-      <div className="border border-white/[0.06] bg-white/[0.02] px-6 py-16 text-center fs-result-reveal">
-        <p className="text-sm text-zinc-500">
-          No symbols yet. Search above, then add tickers to your heatmap.
-        </p>
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-4">
-      {error ? (
-        <div className="border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-400 fs-result-reveal">
-          {mergedRows.length > 0
-            ? error
-            : 'Overview could not be refreshed; showing symbols you have added.'}
+    <Card
+      className="border border-[color:var(--color-fs-border)] bg-white/95 shadow-sm"
+      pt={{
+        body: { className: 'p-5 sm:p-6' },
+        content: { className: 'p-0' },
+      }}
+    >
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-fs-text-subtle)]">
+            Heatmap
+          </h2>
+          <p className="mt-1 text-lg font-semibold tracking-tight text-[color:var(--color-fs-text)]">
+            Sentiment overview
+          </p>
+          <p className="mt-1 text-sm text-[color:var(--color-fs-text-subtle)]">
+            Click a tile for headlines and a fresh refresh.
+          </p>
         </div>
-      ) : null}
-      <div className="grid grid-cols-2 gap-px bg-white/[0.06] sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {mergedRows.map((row, i) => (
-          <button
-            key={row.symbol}
-            type="button"
-            onClick={() => onSelectSymbol?.(row)}
-            className="group fs-tile-in relative flex flex-col border border-transparent bg-black/20 p-5 text-left transition-[transform,box-shadow] duration-300 ease-out focus:outline-none focus-visible:ring-1 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black hover:-translate-y-0.5 hover:bg-black/40 hover:shadow-[0_12px_40px_-12px_rgb(0_0_0/_0.65)] active:translate-y-0 sm:p-6"
-            style={{
-              ...scoreToCardStyle(row.score),
-              ['--fs-stagger' as string]: `${Math.min(i, 24) * 38}ms`,
-            }}
-          >
-            <span className="font-mono text-sm font-medium tracking-tight opacity-80">
-              {row.symbol}
-            </span>
-            <span className="mt-3 font-mono text-2xl font-semibold tabular-nums tracking-tight">
-              {formatScore(row.score)}
-            </span>
-            {row.label ? (
-              <span className="mt-4 inline-block w-fit border border-current/15 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider opacity-90">
-                {row.label}
-              </span>
-            ) : null}
-            <span className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/0 transition group-hover:ring-white/10" />
-          </button>
-        ))}
+        <div className="flex items-center gap-2 rounded-full bg-[color:var(--color-fs-surface-muted)] px-3 py-1.5 text-[11px] font-medium text-[color:var(--color-fs-text-subtle)]">
+          <i className="pi pi-info-circle text-[color:var(--color-fs-blue)]" />
+          <span>Score range −1 … +1</span>
+        </div>
       </div>
-    </div>
+
+      <div className="mt-5">
+        {loading ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} height="9rem" borderRadius="0.75rem" />
+            ))}
+          </div>
+        ) : error && mergedRows.length === 0 ? (
+          <Message
+            severity="error"
+            text={error}
+            className="w-full"
+          />
+        ) : mergedRows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[color:var(--color-fs-border-strong)] bg-[color:var(--color-fs-surface-muted)] px-6 py-12 text-center">
+            <i className="pi pi-inbox text-2xl text-[color:var(--color-fs-text-subtle)]" />
+            <p className="text-sm text-[color:var(--color-fs-text-muted)]">
+              No symbols yet. Search above to add tickers to your heatmap.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {error ? (
+              <Message
+                severity="warn"
+                text={error}
+                className="w-full"
+              />
+            ) : null}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {mergedRows.map((row, i) => {
+                const accent = scoreToAccent(row.score)
+                return (
+                  <button
+                    key={row.symbol}
+                    type="button"
+                    onClick={() => onSelectSymbol?.(row)}
+                    className="group fs-tile-in relative flex flex-col rounded-xl border p-4 text-left shadow-sm transition-[transform,box-shadow] duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-fs-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-white hover:-translate-y-0.5 hover:shadow-md sm:p-5"
+                    style={{
+                      ...scoreToCardStyle(row.score),
+                      ['--fs-stagger' as string]: `${Math.min(i, 24) * 38}ms`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-sm font-semibold tracking-tight">
+                        {row.symbol}
+                      </span>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                        style={{
+                          backgroundColor: 'rgb(255 255 255 / 65%)',
+                          color: accent.fg,
+                          border: `1px solid ${accent.border}`,
+                        }}
+                      >
+                        {accent.label}
+                      </span>
+                    </div>
+                    <span className="mt-3 font-mono text-2xl font-semibold tabular-nums tracking-tight">
+                      {formatScore(row.score)}
+                    </span>
+                    {row.label ? (
+                      <span className="mt-3 inline-block w-fit rounded-md bg-white/55 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-slate-700">
+                        {row.label}
+                      </span>
+                    ) : null}
+                    <span className="mt-auto pt-3 text-[10px] font-medium text-slate-600 opacity-0 transition-opacity group-hover:opacity-100">
+                      Open details →
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }
+

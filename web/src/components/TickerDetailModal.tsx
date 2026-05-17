@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Button } from 'primereact/button'
+import { Dialog } from 'primereact/dialog'
+import { Message } from 'primereact/message'
+import { ProgressSpinner } from 'primereact/progressspinner'
+import { Tag } from 'primereact/tag'
 import { fetchSentimentCacheSymbol, postSentimentBySymbol } from '../api'
 import { formatScore } from '../formatScore'
-import { scoreToCardStyle } from '../scoreColor'
+import { scoreToAccent, scoreToCardStyle } from '../scoreColor'
 import type { SentimentRow } from '../types'
 
 type Props = {
@@ -59,21 +64,10 @@ export function TickerDetailModal({
     }
   }, [row, apiBase])
 
-  useEffect(() => {
-    if (!row) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [row, onClose])
-
-  if (!row) return null
-
   const display = detail ?? row
 
   async function runLatestAnalysis() {
-    if (!apiBase) return
+    if (!apiBase || !display) return
     setRefreshing(true)
     setError(null)
     try {
@@ -87,101 +81,117 @@ export function TickerDetailModal({
     }
   }
 
-  const headlines = display.recent_headlines ?? []
+  const headlines = display?.recent_headlines ?? []
+  const accent = display ? scoreToAccent(display.score) : null
+
+  const headerNode = display ? (
+    <div className="flex items-center gap-3">
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[color:var(--color-fs-blue-soft)] text-[color:var(--color-fs-blue-deep)]">
+        <i className="pi pi-chart-line" />
+      </div>
+      <div>
+        <div className="font-mono text-base font-semibold tracking-tight text-[color:var(--color-fs-text)]">
+          {display.symbol}
+        </div>
+        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-[color:var(--color-fs-text-subtle)]">
+          Sentiment detail
+        </div>
+      </div>
+    </div>
+  ) : null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
-      <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm fs-modal-backdrop"
-        role="presentation"
-        aria-hidden
-        onClick={onClose}
-      />
-      <div
-        key={display.symbol}
-        className="relative z-10 max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto border border-white/[0.1] bg-[#080808] shadow-2xl shadow-black fs-modal-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ticker-detail-title"
-      >
-        <div className="sticky top-0 flex items-center justify-between border-b border-white/[0.06] bg-[#080808]/95 px-6 py-5 backdrop-blur-md">
-          <h2
-            id="ticker-detail-title"
-            className="font-mono text-lg font-semibold tracking-tight text-white"
-          >
-            {display.symbol}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wider text-zinc-400 transition-colors duration-200 hover:border-white/25 hover:text-white active:scale-[0.98]"
-          >
-            Close
-          </button>
-        </div>
-
-        <div className="space-y-8 px-6 py-8">
+    <Dialog
+      visible={!!row}
+      onHide={onClose}
+      header={headerNode}
+      modal
+      dismissableMask
+      draggable={false}
+      resizable={false}
+      className="w-[min(560px,calc(100vw-2rem))]"
+      contentClassName="!p-0"
+      pt={{
+        root: { className: 'rounded-2xl overflow-hidden' },
+        header: {
+          className: 'border-b border-[color:var(--color-fs-border)] !bg-white',
+        },
+        content: { className: '!bg-white' },
+      }}
+    >
+      {display ? (
+        <div className="space-y-6 px-6 py-6">
           <div
-            className="border p-6 fs-result-reveal"
+            className="rounded-xl border p-5 shadow-sm fs-result-reveal"
             style={scoreToCardStyle(display.score)}
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-80">
                 Sentiment
               </span>
               <span className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
                 {formatScore(display.score)}
               </span>
             </div>
-            {display.label ? (
-              <p className="mt-3 text-xs font-medium uppercase tracking-wider opacity-90">
-                {display.label}
-              </p>
-            ) : null}
-            {typeof display.article_count === 'number' ? (
-              <p className="mt-2 font-mono text-xs opacity-80">
-                Stories in this score: {display.article_count}
-              </p>
-            ) : null}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {accent ? (
+                <Tag
+                  value={accent.label}
+                  style={{
+                    backgroundColor: accent.bg,
+                    color: accent.fg,
+                    border: `1px solid ${accent.border}`,
+                  }}
+                  className="!rounded-full !px-3 !py-1 !text-[11px] !font-semibold uppercase tracking-wider"
+                />
+              ) : null}
+              {display.label ? (
+                <span className="rounded-full bg-white/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-700">
+                  {display.label}
+                </span>
+              ) : null}
+              {typeof display.article_count === 'number' ? (
+                <span className="rounded-full bg-white/60 px-3 py-1 font-mono text-[11px] text-slate-700">
+                  {display.article_count} stories
+                </span>
+              ) : null}
+            </div>
           </div>
 
           {loading ? (
-            <div className="flex items-center gap-3 text-sm text-zinc-500 fs-result-reveal">
-              <div
-                className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-zinc-700 border-t-white"
-                aria-hidden
+            <div className="flex items-center gap-3 text-sm text-[color:var(--color-fs-text-muted)] fs-result-reveal">
+              <ProgressSpinner
+                style={{ width: '20px', height: '20px' }}
+                strokeWidth="4"
               />
               <span>Loading related stories…</span>
             </div>
           ) : null}
 
           {error ? (
-            <p
-              className="border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-zinc-300 fs-result-reveal"
-              role="alert"
-            >
-              {error}
-            </p>
+            <Message severity="error" text={error} className="w-full" />
           ) : null}
 
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-fs-text-subtle)]">
                 Related coverage
               </h3>
               {apiBase ? (
-                <button
+                <Button
                   type="button"
                   disabled={refreshing}
                   onClick={runLatestAnalysis}
-                  className="font-mono text-[10px] font-medium uppercase tracking-wider text-zinc-400 underline decoration-white/20 underline-offset-4 transition-colors duration-200 hover:text-white hover:decoration-white/50 disabled:opacity-40"
-                >
-                  {refreshing ? 'Updating…' : 'Refresh from latest news'}
-                </button>
+                  label={refreshing ? 'Updating…' : 'Refresh from latest news'}
+                  icon={refreshing ? 'pi pi-spinner pi-spin' : 'pi pi-refresh'}
+                  size="small"
+                  text
+                  severity="info"
+                />
               ) : null}
             </div>
             {headlines.length > 0 ? (
-              <ul className="mt-5 space-y-3 border-l border-white/10 pl-4">
+              <ul className="mt-4 space-y-3 border-l-2 border-[color:var(--color-fs-blue-soft)] pl-4">
                 {headlines.map((h, i) => (
                   <li
                     key={`${h.url}-${i}`}
@@ -192,7 +202,7 @@ export function TickerDetailModal({
                       href={h.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-zinc-300 underline decoration-white/15 underline-offset-[5px] transition-colors duration-200 hover:text-white hover:decoration-white/40"
+                      className="text-sm text-[color:var(--color-fs-text)] underline decoration-[color:var(--color-fs-blue-soft)] decoration-2 underline-offset-[5px] transition-colors hover:text-[color:var(--color-fs-blue-deep)] hover:decoration-[color:var(--color-fs-blue)]"
                     >
                       {h.title || h.url}
                     </a>
@@ -200,14 +210,14 @@ export function TickerDetailModal({
                 ))}
               </ul>
             ) : !loading ? (
-              <p className="mt-5 font-mono text-xs text-zinc-600">
+              <p className="mt-4 font-mono text-xs text-[color:var(--color-fs-text-subtle)]">
                 No story links on file for this symbol yet. Try refreshing from
                 latest news.
               </p>
             ) : null}
           </div>
         </div>
-      </div>
-    </div>
+      ) : null}
+    </Dialog>
   )
 }
