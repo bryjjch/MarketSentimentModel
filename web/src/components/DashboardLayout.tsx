@@ -20,6 +20,8 @@ type Props = {
   active?: string
   onNavigate?: (key: string) => void
   headerRight?: ReactNode
+  title?: string
+  subtitle?: string
   children: ReactNode
 }
 
@@ -27,6 +29,8 @@ export function DashboardLayout({
   active = 'overview',
   onNavigate,
   headerRight,
+  title = 'Market Sentiment',
+  subtitle = 'Dashboard',
   children,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false)
@@ -126,10 +130,10 @@ export function DashboardLayout({
 
           <div className="hidden flex-col md:flex">
             <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-fs-text-subtle)]">
-              Dashboard
+              {subtitle}
             </span>
             <span className="text-sm font-semibold tracking-tight text-[color:var(--color-fs-text)]">
-              Market Sentiment
+              {title}
             </span>
           </div>
 
