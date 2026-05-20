@@ -1,22 +1,8 @@
-data "archive_file" "api_sentiment_by_symbol_lambda" {
-  type        = "zip"
-  source_dir  = abspath("${path.module}/../lambda/api_sentiment_by_symbol")
-  output_path = "${path.module}/build/api_sentiment_by_symbol.zip"
-  excludes    = ["__pycache__", "*.pyc", ".pytest_cache"]
-}
-
 resource "aws_lambda_function" "api_sentiment_by_symbol" {
   function_name = "${var.project_name}-api-sentiment-by-symbol"
   role          = aws_iam_role.api_sentiment_by_symbol_lambda.arn
-  handler       = "handler.lambda_handler"
-  runtime       = "python3.12"
-
-  filename         = data.archive_file.api_sentiment_by_symbol_lambda.output_path
-  source_code_hash = data.archive_file.api_sentiment_by_symbol_lambda.output_base64sha256
-  layers = [
-    aws_lambda_layer_version.finsense_shared.arn,
-    aws_lambda_layer_version.finsense_deps.arn,
-  ]
+  package_type  = "Image"
+  image_uri     = "${aws_ecr_repository.api_sentiment_by_symbol.repository_url}:${var.image_tag}"
 
   timeout     = 29
   memory_size = 512

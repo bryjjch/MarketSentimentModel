@@ -1,23 +1,8 @@
-data "archive_file" "pseudo_label_lambda" {
-  type        = "zip"
-  source_dir  = abspath("${path.module}/../lambda/pseudo_label")
-  output_path = "${path.module}/build/pseudo_label.zip"
-  excludes    = ["__pycache__", "*.pyc", ".pytest_cache"]
-}
-
 resource "aws_lambda_function" "pseudo_label" {
   function_name = "${var.project_name}-pseudo-label"
   role          = aws_iam_role.pseudo_label_lambda.arn
-  handler       = "handler.lambda_handler"
-  runtime       = "python3.12"
-
-  filename         = data.archive_file.pseudo_label_lambda.output_path
-  source_code_hash = data.archive_file.pseudo_label_lambda.output_base64sha256
-
-  layers = [
-    aws_lambda_layer_version.finsense_shared.arn,
-    aws_lambda_layer_version.finsense_deps.arn,
-  ]
+  package_type  = "Image"
+  image_uri     = "${aws_ecr_repository.pseudo_label.repository_url}:${var.image_tag}"
 
   timeout     = 600
   memory_size = var.pseudo_label_lambda_memory_mb

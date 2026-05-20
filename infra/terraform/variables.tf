@@ -1,3 +1,8 @@
+variable "image_tag" {
+  type        = string
+  description = "ECR image tag for all Lambda container images. Set automatically by lambda-build-push.sh via image_tag.auto.tfvars."
+}
+
 variable "aws_region" {
   type        = string
   description = "AWS region for all resources (must match SageMaker DLC URI region)."

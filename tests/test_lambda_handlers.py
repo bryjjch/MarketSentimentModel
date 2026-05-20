@@ -139,8 +139,8 @@ def _reload_handler(env: dict[str, str], handler_dir: str) -> Any:
     os.environ.update(env)
     for key in ("handler",):
         sys.modules.pop(key, None)
-    path = str(ROOT / "infra" / "lambda" / handler_dir)
-    shared = str(ROOT / "infra" / "lambda" / "_layer" / "python")
+    path = str(ROOT / "src" / "lambdas" / handler_dir)
+    shared = str(ROOT / "src" / "lambdas" / "shared")
     for p in (path, shared):
         if p not in sys.path:
             sys.path.insert(0, p)

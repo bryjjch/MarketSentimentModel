@@ -35,5 +35,5 @@ finsense-train-mlm = "training.train_mlm:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "infra/lambda/_layer/python"]
+pythonpath = ["src", "src/lambdas/shared"]
 testpaths = ["tests"]
