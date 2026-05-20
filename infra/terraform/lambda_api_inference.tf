@@ -1,17 +1,8 @@
-data "archive_file" "api_inference_lambda" {
-  type        = "zip"
-  source_file = abspath("${path.module}/../lambda/api_inference/handler.py")
-  output_path = "${path.module}/build/api_inference.zip"
-}
-
 resource "aws_lambda_function" "api_inference" {
   function_name = "${var.project_name}-api-inference"
   role          = aws_iam_role.api_inference_lambda.arn
-  handler       = "handler.lambda_handler"
-  runtime       = "python3.12"
-
-  filename         = data.archive_file.api_inference_lambda.output_path
-  source_code_hash = data.archive_file.api_inference_lambda.output_base64sha256
+  package_type  = "Image"
+  image_uri     = "${aws_ecr_repository.api_inference.repository_url}:latest"
 
   timeout     = 29
   memory_size = 256

@@ -1,23 +1,8 @@
-data "archive_file" "ingestion_lambda" {
-  type        = "zip"
-  source_dir  = abspath("${path.module}/../lambda/ingestion")
-  output_path = "${path.module}/build/ingestion.zip"
-  excludes    = ["__pycache__", "*.pyc", ".pytest_cache"]
-}
-
 resource "aws_lambda_function" "ingestion" {
   function_name = "${var.project_name}-ingestion"
   role          = aws_iam_role.ingestion_lambda.arn
-  handler       = "handler.lambda_handler"
-  runtime       = "python3.12"
-
-  filename         = data.archive_file.ingestion_lambda.output_path
-  source_code_hash = data.archive_file.ingestion_lambda.output_base64sha256
-
-  layers = [
-    aws_lambda_layer_version.finsense_shared.arn,
-    aws_lambda_layer_version.finsense_deps.arn,
-  ]
+  package_type  = "Image"
+  image_uri     = "${aws_ecr_repository.ingestion.repository_url}:latest"
 
   timeout     = 600
   memory_size = var.ingestion_lambda_memory_mb
