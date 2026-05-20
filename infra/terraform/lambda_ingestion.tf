@@ -2,7 +2,7 @@ resource "aws_lambda_function" "ingestion" {
   function_name = "${var.project_name}-ingestion"
   role          = aws_iam_role.ingestion_lambda.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.ingestion.repository_url}:latest"
+  image_uri     = "${aws_ecr_repository.ingestion.repository_url}:${var.image_tag}"
 
   timeout     = 600
   memory_size = var.ingestion_lambda_memory_mb

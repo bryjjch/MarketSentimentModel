@@ -2,7 +2,7 @@ resource "aws_lambda_function" "cache_read" {
   function_name = "${var.project_name}-sentiment-cache-read"
   role          = aws_iam_role.cache_read_lambda.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.cache_read.repository_url}:latest"
+  image_uri     = "${aws_ecr_repository.cache_read.repository_url}:${var.image_tag}"
 
   timeout     = 10
   memory_size = 128

@@ -2,7 +2,7 @@ resource "aws_lambda_function" "api_inference" {
   function_name = "${var.project_name}-api-inference"
   role          = aws_iam_role.api_inference_lambda.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.api_inference.repository_url}:latest"
+  image_uri     = "${aws_ecr_repository.api_inference.repository_url}:${var.image_tag}"
 
   timeout     = 29
   memory_size = 256

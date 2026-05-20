@@ -2,7 +2,7 @@ resource "aws_lambda_function" "ingestion_prediction" {
   function_name = "${var.project_name}-ingestion-prediction"
   role          = aws_iam_role.ingestion_prediction_lambda.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.ingestion_prediction.repository_url}:latest"
+  image_uri     = "${aws_ecr_repository.ingestion_prediction.repository_url}:${var.image_tag}"
 
   timeout     = 600
   memory_size = var.prediction_lambda_memory_mb

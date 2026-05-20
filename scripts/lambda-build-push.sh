@@ -14,6 +14,8 @@ REGION=$(aws configure get region 2>/dev/null || echo "${AWS_DEFAULT_REGION:-us-
 PROJECT=$(cd "$TERRAFORM_DIR" && terraform output -raw project_name 2>/dev/null || echo "finsense")
 
 REPO_BASE="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+IMAGE_TAG="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+TFVARS_FILE="$REPO_ROOT/infra/terraform/image_tag.auto.tfvars"
 
 echo "Logging in to ECR ($REPO_BASE)..."
 aws ecr get-login-password --region "$REGION" | \
@@ -25,7 +27,7 @@ FUNCS=("${@:-${ALL_FUNCS[@]}}")
 
 for func in "${FUNCS[@]}"; do
   repo_name="${PROJECT}-${func//_/-}"
-  image="${REPO_BASE}/${repo_name}:latest"
+  image="${REPO_BASE}/${repo_name}:${IMAGE_TAG}"
   echo ""
   echo "==> Building $func → $image"
   docker build \
@@ -40,4 +42,6 @@ for func in "${FUNCS[@]}"; do
 done
 
 echo ""
-echo "Done. Run 'terraform apply' in infra/terraform/ to update Lambda image URIs."
+echo "image_tag = \"${IMAGE_TAG}\"" > "$TFVARS_FILE"
+echo "Wrote image tag to $TFVARS_FILE"
+echo "Run 'terraform apply' in infra/terraform/ to update Lambda image URIs."

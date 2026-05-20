@@ -40,6 +40,7 @@ coverage.xml
 # Terraform local build artifacts
 infra/terraform/build/
 infra/terraform/terraform.tfvars
+infra/terraform/image_tag.auto.tfvars
 infra/terraform/backend.hcl
 infra/terraform/.terraform/
 infra/terraform/.terraform.lock.hcl
