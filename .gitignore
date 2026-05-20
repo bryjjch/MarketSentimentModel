@@ -38,15 +38,13 @@ coverage.xml
 .mypy_cache/
 
 # Terraform local build artifacts
-infra/terraform/build/
-infra/terraform/terraform.tfvars
-infra/terraform/image_tag.auto.tfvars
-infra/terraform/backend.hcl
-infra/terraform/.terraform/
-infra/terraform/.terraform.lock.hcl
-infra/terraform/pipeline_definition.json
-infra/lambda/_deps_layer/python/*
-!infra/lambda/_deps_layer/python/.gitkeep
+terraform/build/
+terraform/terraform.tfvars
+terraform/image_tag.auto.tfvars
+terraform/backend.hcl
+terraform/.terraform/
+terraform/pipeline_definition.json
+terraform/.terraform.lock.hcl
 
 # Terraform state and other local artifacts (never commit)
 *.tfstate

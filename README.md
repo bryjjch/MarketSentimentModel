@@ -14,9 +14,9 @@ FinSense is a financial sentiment analysis stack. This repository contains a Pyt
 | Path | Purpose |
 |------|---------|
 | `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, **inference**, metrics, run manifests |
-| `infra/terraform/` | AWS resources (model + data buckets, SageMaker model/endpoint, API routes, Lambdas, DynamoDB, EventBridge, pipeline definition) |
-| `infra/sagemaker/` | SageMaker **serving** handler and **training pipeline** (build script, processing scripts, training entry points) |
-| `infra/lambda/` | Lambda handlers (api inference, sentiment by symbol API, cache read, ingestion, ingestion-prediction, pseudo-label) and shared `finsense_shared` code layer |
+| `terraform/` | AWS resources (model + data buckets, SageMaker model/endpoint, API routes, Lambdas, DynamoDB, EventBridge, pipeline definition) |
+| `src/sagemaker/` | SageMaker **serving** handler and **training pipeline** (build script, processing scripts, training entry points) |
+| `src/lambdas/` | Lambda handlers (api inference, sentiment by symbol API, cache read, ingestion, ingestion-prediction, pseudo-label) and shared `finsense_shared` code layer |
 | `web/` | React + TypeScript + Vite UI for cache list / heatmap |
 | `notebooks/` | Exploratory / demonstration notebooks |
 | `data/` | Default download location for Financial PhraseBank (created on first use) |
@@ -43,7 +43,7 @@ For optional dev dependencies (pytest; **boto3** is included for tests that exer
 pip install -e ".[dev]"
 ```
 
-To generate `infra/terraform/pipeline_definition.json` locally, install the **SageMaker SDK v2** pin (see `requirements/pinned-pipeline.txt`):
+To generate `terraform/pipeline_definition.json` locally, install the **SageMaker SDK v2** pin (see `requirements/pinned-pipeline.txt`):
 
 ```bash
 pip install -r requirements/pinned-pipeline.txt
@@ -53,7 +53,7 @@ or `pip install -e ".[pipeline]"`.
 
 ## Cloud deployment and pipelines
 
-Provisioning (S3, SageMaker endpoint, HTTP API, Lambdas, daily ingestion → ingestion-prediction → pseudo-label flow, DynamoDB cache, SageMaker training pipeline resource) is documented in **`infra/README.md`**, including:
+Provisioning (S3, SageMaker endpoint, HTTP API, Lambdas, daily ingestion → ingestion-prediction → pseudo-label flow, DynamoDB cache, SageMaker training pipeline resource) is documented in **`terraform/README.md`**, including:
 
 - How to obtain and point Terraform at `model.tar.gz` from `finsense-train-classifier`
 - API routes (`POST /predict`, `POST /sentiment/by-symbol`, `GET /sentiment/cache`, `GET /sentiment/cache/{symbol}`)

@@ -5,13 +5,13 @@ Usage
 -----
 Generate JSON for Terraform deployment (offline, no AWS calls):
 
-    python -m infra.sagemaker.pipeline.build_pipeline \\
+    PYTHONPATH=src python -m sagemaker.pipeline.build_pipeline \\
         --role arn:aws:iam::123456789012:role/SageMakerPipelineRole \\
-        --output infra/terraform/pipeline_definition.json
+        --output terraform/pipeline_definition.json
 
 Upsert the pipeline directly to SageMaker:
 
-    python -m infra.sagemaker.pipeline.build_pipeline \\
+    PYTHONPATH=src python -m sagemaker.pipeline.build_pipeline \\
         --role arn:aws:iam::123456789012:role/SageMakerPipelineRole \\
         --upsert
 """
