@@ -30,6 +30,8 @@ for func in "${FUNCS[@]}"; do
   echo "==> Building $func → $image"
   docker build \
     --platform linux/amd64 \
+    --provenance=false \
+    --no-cache \
     -f "$LAMBDAS_DIR/$func/Dockerfile" \
     -t "$image" \
     "$LAMBDAS_DIR"
