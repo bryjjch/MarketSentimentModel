@@ -17,7 +17,7 @@ FinSense is a financial sentiment analysis stack. This repository contains a Pyt
 | `terraform/` | AWS resources (model + data buckets, SageMaker model/endpoint, API routes, Lambdas, DynamoDB, EventBridge, pipeline definition) |
 | `src/sagemaker/` | SageMaker **serving** handler and **training pipeline** (build script, processing scripts, training entry points) |
 | `src/lambdas/` | Lambda handlers (api inference, sentiment by symbol API, cache read, ingestion, ingestion-prediction, pseudo-label) and shared `finsense_shared` code layer |
-| `web/` | React + TypeScript + Vite UI for cache list / heatmap |
+| `frontend/` | React + TypeScript + Vite UI for cache list / heatmap |
 | `notebooks/` | Exploratory / demonstration notebooks |
 | `data/` | Default download location for Financial PhraseBank (created on first use) |
 | `tests/` | Pytest suite |
@@ -64,7 +64,7 @@ Lambda dependency layer setup and `terraform apply` live there as well.
 
 ## Web dashboard
 
-From `web/`:
+From `frontend/`:
 
 ```bash
 npm install
