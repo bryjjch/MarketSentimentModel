@@ -8,7 +8,7 @@ A second **daily ingestion pipeline** (EventBridge → ingestion Lambda → inge
 
 | Path | Purpose |
 |------|---------|
-| [`sagemaker/serving/code/inference.py`](sagemaker/serving/code/inference.py) | SageMaker `model_fn` / `input_fn` / `predict_fn` / `output_fn`; mirrors train/serve behavior from `training.inference` (max length 175, empty-text handling). Copied into `<output_dir>/code/` by the classifier training script so the SageMaker-produced `model.tar.gz` is serving-ready. |
+| [`src/sagemaker/serving/code/inference.py`](../src/sagemaker/serving/code/inference.py) | SageMaker `model_fn` / `input_fn` / `predict_fn` / `output_fn`; mirrors train/serve behavior from `training.inference` (max length 175, empty-text handling). Copied into `<output_dir>/code/` by the classifier training script so the SageMaker-produced `model.tar.gz` is serving-ready. |
 | [`lambda/api_inference/handler.py`](lambda/api_inference/handler.py) | Lambda proxy: forwards JSON body to SageMaker runtime (raw text only). |
 | [`lambda/api_sentiment_by_symbol/`](lambda/api_sentiment_by_symbol/) | Orchestration: resolve symbol, collect news (RSS) and optional Reddit posts, batch `invoke_endpoint`, aggregate scores. |
 | [`lambda/cache_read/handler.py`](lambda/cache_read/handler.py) | Reads precomputed per-symbol rows from DynamoDB (`GET /sentiment/cache/{symbol}`). |
@@ -17,7 +17,7 @@ A second **daily ingestion pipeline** (EventBridge → ingestion Lambda → inge
 | [`lambda/pseudo_label/handler.py`](lambda/pseudo_label/handler.py) | Provider-agnostic LLM labeler (`openai`, `google`, or offline `echo`). Writes `pseudo/` rows and merges newly-labeled rows into `curated/` with `source=pseudo`. |
 | [`lambda/_layer/python/finsense_shared/`](lambda/_layer/python/finsense_shared/) | Shared Lambda code layer: source adapters, S3 I/O, SageMaker batch invoker, confidence math, Hive-style key helpers, and LLM labeling logic. |
 | [`lambda/_deps_layer/`](lambda/_deps_layer/) | Shared Lambda dependency layer (`python/` site-packages) for third-party SDKs such as OpenAI and Google GenAI. |
-| [`terraform/`](terraform/) | Declarative AWS resources (S3, IAM, SageMaker model/endpoint, Lambda, HTTP API, DynamoDB, EventBridge). |
+| [`terraform/`](.) | Declarative AWS resources (S3, IAM, SageMaker model/endpoint, Lambda, HTTP API, DynamoDB, EventBridge). |
 
 ## 1. Obtain `model.tar.gz`
 
@@ -29,7 +29,7 @@ For local iteration you can still run training on your laptop (`finsense-train-c
 
 Pick a **Hugging Face PyTorch inference** DLC URI for the **same region** you will deploy. Confirm available DLCs [`here`](https://huggingface.co/docs/sagemaker/dlcs/available).
 
-Set `sagemaker_image_uri` in `terraform.tfvars` (see [`terraform/terraform.tfvars.example`](terraform/terraform.tfvars.example)).
+Set `sagemaker_image_uri` in `terraform.tfvars` (see [`terraform.tfvars.example`](terraform.tfvars.example)).
 
 ## 3. S3 bucket behavior (Terraform)
 
@@ -51,7 +51,7 @@ For development destroys, you may set `s3_force_destroy = true` in `terraform.tf
 ## 4. Deploy with Terraform
 
 ```bash
-cd infra/terraform
+cd terraform
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars: aws_region, sagemaker_image_uri, model_tarball_path
 
@@ -79,13 +79,13 @@ aws dynamodb create-table \
 After bootstrapping, day-to-day commands from any computer are:
 
 ```bash
-cd infra/terraform
+cd terraform
 terraform init -backend-config=backend.hcl
 terraform plan
 terraform apply
 ```
 
-`model_tarball_path` is resolved with `abspath()` relative to your current working directory when you run `apply`; paths like `../../model.tar.gz` from `infra/terraform` work if `model.tar.gz` lives at the repo root.
+`model_tarball_path` is resolved with `abspath()` relative to your current working directory when you run `apply`; paths like `../model.tar.gz` from `terraform/` work if `model.tar.gz` lives at the repo root.
 
 **Order of creation:** S3 upload (`aws_s3_object`) → SageMaker model → endpoint configuration → endpoint → Lambda IAM + functions (api_inference, api_sentiment_by_symbol, cache_read, pseudo_label, ingestion_prediction, ingestion) → Lambda Layers (`finsense_shared` + `finsense_deps`) → API routes → DynamoDB / SSM → EventBridge ingestion schedule. The first `apply` can take **15–25+ minutes** while the endpoint becomes `InService`.
 
@@ -119,7 +119,7 @@ curl -sS -X POST "$(terraform output -raw predict_url)" \
   -d '{"text":"EPS beat expectations"}'
 ```
 
-Body formats supported by the SageMaker handler match [`inference.py`](sagemaker/serving/code/inference.py): `{"text":"..."}` or `{"texts":["...","..."]}`. The Lambda forwards the body as-is.
+Body formats supported by the SageMaker handler match [`inference.py`](../src/sagemaker/serving/code/inference.py): `{"text":"..."}` or `{"texts":["...","..."]}`. The Lambda forwards the body as-is.
 
 ### Sentiment by symbol (`POST /sentiment/by-symbol`)
 
@@ -127,7 +127,7 @@ A separate **orchestration Lambda** (`lambda/api_sentiment_by_symbol/`) implemen
 
 1. Normalizes the ticker (uppercase, 1–5 letters).
 2. Collects text via **source adapters**: Google News RSS (no API key) and, if `options.include_social` is true (default), **Reddit** via the official API when credentials are configured.
-3. Calls **SageMaker** with `{"texts":[...]}` (same contract as [`inference.py`](sagemaker/serving/code/inference.py)) using `boto3` `invoke_endpoint`—not the `POST /predict` route.
+3. Calls **SageMaker** with `{"texts":[...]}` (same contract as [`inference.py`](../src/sagemaker/serving/code/inference.py)) using `boto3` `invoke_endpoint`—not the `POST /predict` route.
 4. Aggregates per-text probabilities into `score` (mean of positive minus negative probability mass per article), `label` (`positive` / `neutral` / `negative`), `article_count`, and `recent_headlines` (title + URL pairs; length capped by `RECENT_HEADLINES_MAX`, default 10).
 
 **Request (example):**
@@ -266,12 +266,12 @@ DataPrep (Processing)
 
 | Path | Purpose |
 |------|---------|
-| [`sagemaker/pipeline/pipeline_definition.py`](sagemaker/pipeline/pipeline_definition.py) | Builds the `sagemaker.workflow.pipeline.Pipeline` object via the Python SDK. |
-| [`sagemaker/pipeline/build_pipeline.py`](sagemaker/pipeline/build_pipeline.py) | CLI helper to generate pipeline definition JSON (or upsert directly). |
-| [`sagemaker/pipeline/scripts/prepare_training_data.py`](sagemaker/pipeline/scripts/prepare_training_data.py) | Processing script: assembles curated data + PhraseBank (from S3 `reference/phrasebank/`), produces MLM corpus, classifier data, and held-out test split. |
-| [`sagemaker/pipeline/scripts/evaluate_classifier.py`](sagemaker/pipeline/scripts/evaluate_classifier.py) | Processing script: loads trained classifier, evaluates against the held-out test set, writes `evaluation.json`. |
-| [`sagemaker/pipeline/entry_points/run_mlm.py`](sagemaker/pipeline/entry_points/run_mlm.py) | Thin wrapper for `training.train_mlm:main` (resolves relative imports under SageMaker). |
-| [`sagemaker/pipeline/entry_points/run_classifier.py`](sagemaker/pipeline/entry_points/run_classifier.py) | Thin wrapper for `training.train_classifier:main`. |
+| [`src/sagemaker/pipeline/pipeline_definition.py`](../src/sagemaker/pipeline/pipeline_definition.py) | Builds the `sagemaker.workflow.pipeline.Pipeline` object via the Python SDK. |
+| [`src/sagemaker/pipeline/build_pipeline.py`](../src/sagemaker/pipeline/build_pipeline.py) | CLI helper to generate pipeline definition JSON (or upsert directly). |
+| [`src/sagemaker/pipeline/scripts/prepare_training_data.py`](../src/sagemaker/pipeline/scripts/prepare_training_data.py) | Processing script: assembles curated data + PhraseBank (from S3 `reference/phrasebank/`), produces MLM corpus, classifier data, and held-out test split. |
+| [`src/sagemaker/pipeline/scripts/evaluate_classifier.py`](../src/sagemaker/pipeline/scripts/evaluate_classifier.py) | Processing script: loads trained classifier, evaluates against the held-out test set, writes `evaluation.json`. |
+| [`src/sagemaker/pipeline/entry_points/run_mlm.py`](../src/sagemaker/pipeline/entry_points/run_mlm.py) | Thin wrapper for `training.train_mlm:main` (resolves relative imports under SageMaker). |
+| [`src/sagemaker/pipeline/entry_points/run_classifier.py`](../src/sagemaker/pipeline/entry_points/run_classifier.py) | Thin wrapper for `training.train_classifier:main`. |
 
 ### Build and deploy the pipeline
 
@@ -286,16 +286,16 @@ pip install -r requirements/pinned-pipeline.txt
 
 ```bash
 cd <repo-root>
-python -m infra.sagemaker.pipeline.build_pipeline \
+PYTHONPATH=src python -m sagemaker.pipeline.build_pipeline \
     --role arn:aws:iam::123456789012:role/finsense-sagemaker-pipeline \
     --region us-east-1 \
-    --output infra/terraform/pipeline_definition.json
+    --output terraform/pipeline_definition.json
 ```
 
 3. Deploy with Terraform:
 
 ```bash
-cd infra/terraform
+cd terraform
 terraform apply   # picks up pipeline_definition.json automatically
 ```
 

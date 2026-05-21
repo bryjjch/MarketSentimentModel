@@ -27,7 +27,7 @@ def invoke_predict(
 ) -> list[dict[str, Any]]:
     """Call ``InvokeEndpoint`` with ``{"texts": [...]}`` in batches and concatenate records in input order.
 
-    The SageMaker handler (``infra/sagemaker/serving/code/inference.py``) returns a list of
+    The SageMaker handler (``src/sagemaker/serving/code/inference.py``) returns a list of
     per-text records of shape::
 
         {"text": "...", "label_id": 0|1|2, "label_name": "negative|neutral|positive",

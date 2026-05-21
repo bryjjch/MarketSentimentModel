@@ -2,11 +2,11 @@
 # Build and push all Lambda container images to ECR.
 # Usage: ./scripts/lambda-build-push.sh [function_name ...]
 # If no function names are given, builds all six.
-# Requires: docker, aws CLI, terraform output available in infra/terraform/.
+# Requires: docker, aws CLI, terraform output available in terraform/.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TERRAFORM_DIR="$REPO_ROOT/infra/terraform"
+TERRAFORM_DIR="$REPO_ROOT/terraform"
 LAMBDAS_DIR="$REPO_ROOT/src/lambdas"
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -15,7 +15,7 @@ PROJECT=$(cd "$TERRAFORM_DIR" && terraform output -raw project_name 2>/dev/null 
 
 REPO_BASE="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 IMAGE_TAG="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
-TFVARS_FILE="$REPO_ROOT/infra/terraform/image_tag.auto.tfvars"
+TFVARS_FILE="$REPO_ROOT/terraform/image_tag.auto.tfvars"
 
 echo "Logging in to ECR ($REPO_BASE)..."
 aws ecr get-login-password --region "$REGION" | \
@@ -44,4 +44,4 @@ done
 echo ""
 echo "image_tag = \"${IMAGE_TAG}\"" > "$TFVARS_FILE"
 echo "Wrote image tag to $TFVARS_FILE"
-echo "Run 'terraform apply' in infra/terraform/ to update Lambda image URIs."
+echo "Run 'terraform apply' in terraform/ to update Lambda image URIs."
