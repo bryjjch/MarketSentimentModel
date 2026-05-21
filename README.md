@@ -1,40 +1,61 @@
 # FinSense
 
-FinSense is a financial sentiment analysis stack. This repository contains a Python **training** package (Hugging Face Transformers and PyTorch), an **AWS** deployment (SageMaker, API Gateway, Lambdas, and S3 buckets), and a small **React** UI for heatmaps showcasing sentiment across stocks.
+FinSense is a financial sentiment analysis stack built around a fine-tuned FinBERT classifier. It covers model training, AWS deployment, and a React UI for per-symbol sentiment heatmaps.
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
-| `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, **inference**, metrics, run manifests |
-| `terraform/` | AWS resources (model + data buckets, SageMaker model/endpoint, API routes, Lambdas, DynamoDB, EventBridge, pipeline definition) |
-| `src/sagemaker/` | SageMaker **serving** handler and **training pipeline** (build script, processing scripts, training entry points) |
-| `src/lambdas/` | Lambda handlers (api inference, sentiment by symbol API, cache read, ingestion, ingestion-prediction, pseudo-label) and shared `finsense_shared` code layer |
+| `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, inference, metrics, run manifests |
+| `terraform/` | AWS resources (buckets, SageMaker endpoint, API Gateway, Lambdas, DynamoDB, EventBridge, pipeline) |
+| `src/sagemaker/` | SageMaker serving handler and training pipeline (build script, processing scripts, training entry points) |
+| `src/lambdas/` | Lambda handlers and shared `finsense_shared` code layer |
 | `frontend/` | React + TypeScript + Vite UI for cache list / heatmap |
 | `notebooks/` | Exploratory / demonstration notebooks |
 | `data/` | Default download location for Financial PhraseBank (created on first use) |
 | `tests/` | Pytest suite |
-| `requirements` | Necessary packages for different environments |
 
-## Cloud deployment and pipelines
+## Architecture decisions
 
-Provisioning (S3, SageMaker endpoint, HTTP API, Lambdas, daily ingestion → ingestion-prediction → pseudo-label flow, DynamoDB cache, SageMaker training pipeline resource) is documented in **`terraform/README.md`**, including:
+### Two-stage training: MLM → classifier
 
-- How to obtain and point Terraform at `model.tar.gz` from `finsense-train-classifier`
-- API routes (`POST /predict`, `POST /sentiment/by-symbol`, `GET /sentiment/cache`, `GET /sentiment/cache/{symbol}`)
-- Data layout under the data bucket (`raw/`, `predictions/`, `pseudo/`, `curated/`)
-- Building and starting the SageMaker training pipeline
+The pipeline first runs **masked language model (MLM) pre-training** on the domain corpus. This adapts the model's representations to financial news language before the classification head is added. The SageMaker training pipeline enforces this order: DataPrep → MLM → Classifier → Evaluate → quality gate → Register.
 
-Lambda dependency layer setup and `terraform apply` live there as well.
+### SageMaker Serverless Inference
 
-## Label convention
+The model is served via a **Serverless Inference** endpoint rather than a provisioned instance. This eliminates idle costs for our workload with infrequent demand. The tradeoff is cold-start latency on the first invocation after a quiet period.
 
-Training and saved models use integer labels aligned with Financial PhraseBank style:
+### Two API paths: on-demand vs. pre-computed cache
 
-| Label ID | Sentiment |
-|----------|-----------|
+Two access patterns co-exist on the same HTTP API:
+
+- **`POST /sentiment/by-symbol`** — collects live news, calls the SageMaker endpoint, and returns a fresh score. Suited for interactive queries.
+- **`GET /sentiment/cache/{symbol}`** — reads a pre-computed DynamoDB row with a 7-day TTL. Suited for the UI heatmap, which reads the same symbols repeatedly.
+
+The daily ingestion pipeline writes the DynamoDB cache as a side-effect of running predictions, so no separate cache-refresh Lambda is needed.
+
+### Daily data flywheel with confidence-gated pseudo-labeling
+
+An EventBridge-triggered Lambda chain runs once per day:
+
+1. **Ingestion** — collects news and social text per ticker, writes `raw/` to S3.
+2. **Prediction** — scores each text, writes `predictions/`. High-confidence rows go directly to `curated/` as training data.
+3. **Pseudo-labeling** — low-confidence rows (top-class probability < 0.65 by default) are routed to an LLM (OpenAI or Gemini, provider-agnostic). The LLM label is written to `pseudo/` and merged into `curated/`.
+
+This loop continuously expands the labeled training corpus without manual annotation.
+
+### Hive-partitioned S3 layout
+
+All pipeline output is written in Hive-style partitions (`dt=YYYY-MM-DD/symbol=AAPL/`) so the entire data bucket can be registered as a single Athena table and queried by date, symbol, or source (`model` vs. `pseudo`) without reshuffling data.
+
+### Label convention
+
+Training and saved models use integer labels aligned with Financial PhraseBank:
+
+| Label | Sentiment |
+|-------|-----------|
 | 0 | negative |
 | 1 | neutral |
 | 2 | positive |
 
-FinBERT checkpoints use a different default class order; the classifier script remaps weights so saved artifacts use the table above.
+FinBERT checkpoints ship with a different default class order; the classifier training script remaps weights so all saved artifacts use the table above.
