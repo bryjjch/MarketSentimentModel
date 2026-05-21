@@ -1,175 +1,61 @@
 # FinSense
 
-FinSense is a financial sentiment analysis stack. This repository contains a Python **training** package (Hugging Face Transformers and PyTorch), an optional **AWS** deployment (SageMaker, API Gateway, Lambdas, and S3 buckets), a **SageMaker Pipeline** definition for end-to-end retraining, and a small **React** UI for heatmaps showcasing sentiment across stocks.
-
-## Requirements
-
-- **Python** 3.10 or newer  
-- **GPU** recommended for classifier and MLM training (CPU is possible but slow)  
-- **Transformers 5.x** expects a recent **PyTorch** (2.4+).
-- Dependencies are declared in `pyproject.toml` (PyTorch, Transformers, Datasets, scikit-learn, pandas, OpenAI / Google GenAI clients, etc.)
+FinSense is a financial sentiment analysis stack built around a fine-tuned FinBERT classifier. It covers model training, AWS deployment, and a React UI for per-symbol sentiment heatmaps.
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
-| `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, **inference**, metrics, run manifests |
-| `terraform/` | AWS resources (model + data buckets, SageMaker model/endpoint, API routes, Lambdas, DynamoDB, EventBridge, pipeline definition) |
-| `src/sagemaker/` | SageMaker **serving** handler and **training pipeline** (build script, processing scripts, training entry points) |
-| `src/lambdas/` | Lambda handlers (api inference, sentiment by symbol API, cache read, ingestion, ingestion-prediction, pseudo-label) and shared `finsense_shared` code layer |
+| `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, inference, metrics, run manifests |
+| `terraform/` | AWS resources (buckets, SageMaker endpoint, API Gateway, Lambdas, DynamoDB, EventBridge, pipeline) |
+| `src/sagemaker/` | SageMaker serving handler and training pipeline (build script, processing scripts, training entry points) |
+| `src/lambdas/` | Lambda handlers and shared `finsense_shared` code layer |
 | `frontend/` | React + TypeScript + Vite UI for cache list / heatmap |
 | `notebooks/` | Exploratory / demonstration notebooks |
 | `data/` | Default download location for Financial PhraseBank (created on first use) |
 | `tests/` | Pytest suite |
-| `requirements` | Necessary packages for different environments |
 
-## Installation (training package)
+## Architecture decisions
 
-From the repository root:
+### Two-stage training: MLM → classifier
 
-```bash
-pip install -r requirements-training.txt
-```
+The pipeline first runs **masked language model (MLM) pre-training** on the domain corpus. This adapts the model's representations to financial news language before the classification head is added. The SageMaker training pipeline enforces this order: DataPrep → MLM → Classifier → Evaluate → quality gate → Register.
 
-Or equivalently:
+### SageMaker Serverless Inference
 
-```bash
-pip install -e .
-```
+The model is served via a **Serverless Inference** endpoint rather than a provisioned instance. This eliminates idle costs for our workload with infrequent demand. The tradeoff is cold-start latency on the first invocation after a quiet period.
 
-For optional dev dependencies (pytest; **boto3** is included for tests that exercise AWS-related helpers):
+### Two API paths: on-demand vs. pre-computed cache
 
-```bash
-pip install -e ".[dev]"
-```
+Two access patterns co-exist on the same HTTP API:
 
-To generate `terraform/pipeline_definition.json` locally, install the **SageMaker SDK v2** pin (see `requirements/pinned-pipeline.txt`):
+- **`POST /sentiment/by-symbol`** — collects live news, calls the SageMaker endpoint, and returns a fresh score. Suited for interactive queries.
+- **`GET /sentiment/cache/{symbol}`** — reads a pre-computed DynamoDB row with a 7-day TTL. Suited for the UI heatmap, which reads the same symbols repeatedly.
 
-```bash
-pip install -r requirements/pinned-pipeline.txt
-```
+The daily ingestion pipeline writes the DynamoDB cache as a side-effect of running predictions, so no separate cache-refresh Lambda is needed.
 
-or `pip install -e ".[pipeline]"`.
+### Daily data flywheel with confidence-gated pseudo-labeling
 
-## Cloud deployment and pipelines
+An EventBridge-triggered Lambda chain runs once per day:
 
-Provisioning (S3, SageMaker endpoint, HTTP API, Lambdas, daily ingestion → ingestion-prediction → pseudo-label flow, DynamoDB cache, SageMaker training pipeline resource) is documented in **`terraform/README.md`**, including:
+1. **Ingestion** — collects news and social text per ticker, writes `raw/` to S3.
+2. **Prediction** — scores each text, writes `predictions/`. High-confidence rows go directly to `curated/` as training data.
+3. **Pseudo-labeling** — low-confidence rows (top-class probability < 0.65 by default) are routed to an LLM (OpenAI or Gemini, provider-agnostic). The LLM label is written to `pseudo/` and merged into `curated/`.
 
-- How to obtain and point Terraform at `model.tar.gz` from `finsense-train-classifier`
-- API routes (`POST /predict`, `POST /sentiment/by-symbol`, `GET /sentiment/cache`, `GET /sentiment/cache/{symbol}`)
-- Data layout under the data bucket (`raw/`, `predictions/`, `pseudo/`, `curated/`)
-- Building and starting the SageMaker training pipeline
+This loop continuously expands the labeled training corpus without manual annotation.
 
-Lambda dependency layer setup and `terraform apply` live there as well.
+### Hive-partitioned S3 layout
 
-## Web dashboard
+All pipeline output is written in Hive-style partitions (`dt=YYYY-MM-DD/symbol=AAPL/`) so the entire data bucket can be registered as a single Athena table and queried by date, symbol, or source (`model` vs. `pseudo`) without reshuffling data.
 
-From `frontend/`:
+### Label convention
 
-```bash
-npm install
-cp .env.example .env.local
-# Set VITE_API_BASE_URL to your HTTP API invoke URL (see infra README / terraform outputs)
-npm run dev
-```
+Training and saved models use integer labels aligned with Financial PhraseBank:
 
-The app calls the deployed API (e.g. cached sentiment list and per-symbol cache). It does not run the training stack locally.
-
-## Label convention
-
-Training and saved models use integer labels aligned with Financial PhraseBank style:
-
-| Label ID | Sentiment |
-|----------|-----------|
+| Label | Sentiment |
+|-------|-----------|
 | 0 | negative |
 | 1 | neutral |
 | 2 | positive |
 
-FinBERT checkpoints use a different default class order; the classifier script remaps weights so saved artifacts use the table above.
-
-## Inference
-
-```python
-from training.inference import SentimentPredictor
-
-p = SentimentPredictor("outputs/clf_finbert", device="cpu")
-rows = p.predict(["EPS beat", "   ", "guidance cut"])
-```
-
-## Command-line tools
-
-After installation, these entry points are available (see `--help` on each):
-
-### 1. Fine-tune the classifier (`finsense-train-classifier`)
-
-Uses **Financial PhraseBank** by default (downloaded into `data/` if missing). Writes a **Hugging Face model folder** plus **`training_manifest.json`** under `--output_dir`.
-
-**Evaluation**: each validation epoch logs **accuracy**, **macro / weighted F1**, **macro precision/recall**, **per-class precision/recall/F1**, and **confusion matrix cells** (`cm_i_j`).
-
-**Splits**: by default **10%** of rows are held out as a **test / production-eval** set (`--test_ratio 0.1`). The remaining data are split into train/validation using `--val_ratio` (default **0.2** of that remainder). Pass `--test_ratio 0` for the legacy behavior (train/val only on the full table).
-
-**Model selection**: `--metric_for_best_model` (default `macro_f1`) controls `load_best_model_at_end`.
-
-```bash
-finsense-train-classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
-finsense-train-classifier --base_model bert-base-uncased --mlm_checkpoint outputs/mlm_bert --pseudo_data data/pseudo.jsonl --output_dir outputs/clf_mlm
-```
-
-Useful flags include `--phrasebank_txt`, `--pseudo_data`, `--pseudo_weight`, `--num_train_epochs`, `--fp16` (CUDA), `--max_length`, `--test_ratio`, and `--metric_for_best_model`.
-
-### 2. Continued pre-training with MLM (`finsense-train-mlm`)
-
-Unlabeled **JSONL** (field `text` by default) and/or **`.txt`** (one document per line):
-
-```bash
-finsense-train-mlm --train_files data/wsb.jsonl data/reuters_lines.txt --output_dir outputs/mlm_bert
-```
-
-Under SageMaker `--train_files` defaults to every `.jsonl`/`.txt` file in the `train` channel (`SM_CHANNEL_TRAIN`), `--output_dir` defaults to `SM_MODEL_DIR`, and HF Trainer checkpoints are kept under `SM_OUTPUT_DATA_DIR/checkpoints` so they are excluded from the packaged `model.tar.gz`.
-
-### 3. Pseudo-labeling with an LLM (`finsense-pseudo-label`)
-
-Reads JSONL with a text field, appends `label` / `label_name` per row. Requires API keys for cloud providers:
-
-- **OpenAI**: set `OPENAI_API_KEY` (default provider; default model `gpt-4o-mini`).
-- **Google AI Studio**: set `GOOGLE_API_KEY` or `GEMINI_API_KEY`, use `--provider google` (default model `gemini-2.0-flash`).
-- **Offline stub**: `--provider echo` (random labels for plumbing tests only).
-
-```bash
-finsense-pseudo-label --input data/raw_news.jsonl --output data/pseudo.jsonl
-finsense-pseudo-label --provider google --input data/raw_news.jsonl --output data/pseudo.jsonl --resume
-```
-
-## Run manifest (`training_manifest.json`)
-
-After each classifier run, metadata is written next to the weights:
-
-- Git revision (if available), library versions, **inference API version**
-- Full CLI configuration, row counts (phrasebank / pseudo / train / val / test)
-- Final validation metrics (including confusion matrix), optional **test** metrics, and best-checkpoint info
-
-## Artifacts and deployment
-
-Training writes a deploy-ready **Transformers** sequence-classification directory (weights, tokenizer, `training_manifest.json`, and `code/inference.py` for SageMaker hosting) under `--output_dir`. Under SageMaker the script defaults `--output_dir` to `SM_MODEL_DIR` and keeps HF Trainer checkpoints under `SM_OUTPUT_DATA_DIR/checkpoints`, so the job's automatic `model.tar.gz` is ready to serve without any post-training packaging step. Locally, point `--output_dir` somewhere convenient and the same layout is produced.
-
-## Tests
-
-```bash
-pip install -e ".[dev]"
-python -m pytest
-```
-
-Integration tests that load a tiny Hugging Face model are **skipped** when Transformers reports PyTorch is unavailable (for example an older torch than 2.4 with Transformers 5.x). Upgrade PyTorch to run them.
-
-## Development note
-
-Run modules from the repo root with `PYTHONPATH=src` if you use `python -m training.train_classifier` without an editable install.
-
-PowerShell:
-
-```powershell
-$env:PYTHONPATH = "src"
-python -m training.train_classifier --base_model ProsusAI/finbert --output_dir outputs/clf_finbert
-```
-
-Command Prompt (`cmd.exe`): `set PYTHONPATH=src` before the same `python -m ...` line. Linux or macOS: `export PYTHONPATH=src`.
+FinBERT checkpoints ship with a different default class order; the classifier training script remaps weights so all saved artifacts use the table above.
