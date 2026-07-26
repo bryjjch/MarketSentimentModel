@@ -23,4 +23,4 @@
 
 # Note: the SageMaker model, endpoint configuration and endpoint are NOT Terraform
 # resources. The model_promote Lambda creates and rolls them forward when a model
-# package is approved — see the note at the top of sagemaker.tf.
+# package is approved — see the note at the top of modules/sagemaker/registry.tf.

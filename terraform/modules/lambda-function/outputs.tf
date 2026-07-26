@@ -12,13 +12,3 @@ output "invoke_arn" {
   description = "ARN used as an API Gateway AWS_PROXY integration_uri."
   value       = aws_lambda_function.this.invoke_arn
 }
-
-output "role_arn" {
-  description = "Execution role ARN."
-  value       = aws_iam_role.this.arn
-}
-
-output "role_name" {
-  description = "Execution role name."
-  value       = aws_iam_role.this.name
-}

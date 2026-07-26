@@ -12,7 +12,6 @@ Terraform for the whole AWS stack. The root module here is what CI runs
 | `locals.tf` | Derived names, the constructed endpoint ARN, and the Lambda image list |
 | `variables.tf` | All root inputs, bannered by the module that consumes them |
 | `outputs.tf` | Read by name from `scripts/` and `.github/workflows/` — rename with care |
-| `moved.tf` | State migration for the modules refactor; see the note in the file |
 | `env/prod.tfvars` | Production values, applied by `.github/workflows/deploy.yml` |
 | `backend.hcl` | S3 backend config, passed to `terraform init -backend-config=` |
 
