@@ -219,12 +219,14 @@ class TestEvaluationJsonContract:
 def compiled_definition() -> dict:
     """Compile the pipeline to its JSON definition.
 
-    Skips where the SageMaker SDK is absent. Probing ``sagemaker.workflow.pipeline_context``
+    Skips where the SageMaker SDK is absent, so a checkout without the ``pipeline`` extra
+    still runs the rest of the suite. Probing ``sagemaker.workflow.pipeline_context``
     rather than ``sagemaker`` is deliberate: pytest's ``pythonpath`` includes ``src``, and
-    ``src/sagemaker/`` is a namespace package that claims the top-level name whenever the
+    ``src/sagemaker/`` is a namespace portion that claims the top-level name whenever the
     real SDK is not installed — so ``importorskip("sagemaker")`` silently succeeds and the
-    tests then die on the missing submodule. The training CI environment is exactly that
-    case; the test-pipeline job installs the SDK and runs these for real.
+    tests then die on the missing submodule. (With the SDK installed there is no clash:
+    a namespace portion never wins over a regular package found later on the path.)
+    CI installs the SDK and asserts it is importable, so these never skip there.
 
     ``.run()`` only returns step arguments under a real ``PipelineSession`` — a mocked
     ``Session`` makes it try to launch the job and return None. So use a genuine
