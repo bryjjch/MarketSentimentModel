@@ -813,19 +813,3 @@ def test_validate_task_rejects_malformed_payloads() -> None:
         pipeline.validate_task({"task": "predict", "run_id": "run-1"}, pipeline.TASK_PREDICT)
     with pytest.raises(ValueError):
         pipeline.validate_task("not a dict", pipeline.TASK_PREDICT)
-
-
-def test_requirements_files_are_utf8() -> None:
-    """pip decodes requirement files with the locale encoding.
-
-    A file saved as cp1252 (a stray en-dash in a comment is enough) installs fine on a
-    Windows-ish locale and dies with UnicodeDecodeError on a Linux CI runner, before a
-    single package is resolved.
-    """
-    files = sorted((ROOT / "requirements").glob("*.txt"))
-    assert files, "no requirements files found"
-    for path in files:
-        try:
-            path.read_text(encoding="utf-8")
-        except UnicodeDecodeError as exc:
-            pytest.fail(f"{path.relative_to(ROOT)} is not valid UTF-8: {exc}")

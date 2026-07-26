@@ -17,6 +17,28 @@ FinSense is a financial sentiment analysis stack built around a fine-tuned FinBE
 | `data/` | Local download location for Financial PhraseBank, used by the notebooks (created on first use). Cloud training reads the copy in S3 instead |
 | `tests/` | Pytest suite |
 
+## Environment setup
+
+All Python dependencies live in `pyproject.toml`. The base project has no dependencies;
+each environment is an extra, so you install only what you need:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+
+pip install -e ".[train,dev]"           # training, pseudo-labeling, and the test suite
+pip install -e ".[train,dev,pipeline]"  # the above plus the SageMaker SDK — what CI runs
+pip install -e ".[pipeline]"            # SDK only, no torch: builds/upserts the pipeline
+pip install -e ".[serve]"               # inference-only stack
+```
+
+Run the suite with `pytest`. The pipeline-definition tests skip without the `pipeline`
+extra, so use the CI combination if you are changing `pipeline_definition.py`.
+
+Versions are pinned exactly — these describe reproducible environments, not a library's
+compatible range. Note that neither cloud training nor the deployed endpoint installs
+them: both run in AWS Deep Learning Containers pinned by `TrainImageUri` /
+`InferenceImageUri` in `src/sagemaker/pipeline/pipeline_definition.py`.
+
 ## Architecture decisions
 
 ### Two-stage training: MLM → classifier

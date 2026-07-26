@@ -39,12 +39,11 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
-  # Two test jobs because the requirements files describe two different production
-  # environments and CANNOT be installed together: sagemaker 2.x needs either
-  # pandas>=2.3.0 or numpy<2, and pinned-train.txt pins pandas==2.2.3 / numpy==2.1.3.
-  # Nothing needs them together — the training container never has the SDK installed.
+  # One environment for the whole suite: the train and pipeline extras are
+  # co-installable (sagemaker 2.x wants pandas>=2.3.0 and numpy>=1.26.4; the training
+  # pins satisfy both). Installing the SDK here is what stops TestPipelineDefinition
+  # from silently skipping — see the compiled_definition fixture in tests/test_pipeline.py.
   test:
-    name: test (training env)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,36 +56,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" -r requirements/pinned-train.txt
+          pip install -e ".[train,dev,pipeline]"
 
       - name: Check Lambda sources compile
         run: python scripts/check_lambda_sources.py
 
-      # TestPipelineDefinition importorskips sagemaker, which is absent here by
-      # design; test-pipeline below covers it.
+      # Guards against the SDK quietly dropping out of the environment and turning the
+      # pipeline definition tests into skips; CI upserts that definition on merge.
+      - name: Require the SageMaker SDK
+        run: python -c "import sagemaker.workflow.pipeline_context"
+
       - name: Run tests
         run: pytest -q
-
-  test-pipeline:
-    name: test (pipeline client env)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      # Deliberately does not install the project: the pipeline definition module is
-      # imported by path and needs only the SDK, so this stays a light job.
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements/pinned-pipeline.txt "pytest>=8.0"
-
-      - name: Verify the pipeline definition compiles
-        run: pytest -q tests/test_pipeline.py -k TestPipelineDefinition
 
   # Compute the image tag once so every downstream job agrees on it.
   tag:
@@ -99,7 +80,7 @@ jobs:
         run: echo "image_tag=$(scripts/image-tag.sh)" >> "$GITHUB_OUTPUT"
 
   images:
-    needs: [test, test-pipeline, tag]
+    needs: [test, tag]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -270,7 +251,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - run: pip install -r requirements/pinned-pipeline.txt
+      # The `pipeline` extra only, so this stays a seconds-long install: the project
+      # has no base dependencies, so nothing pulls in torch here.
+      - run: pip install -e ".[pipeline]"
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
