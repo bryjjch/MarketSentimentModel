@@ -1,13 +1,11 @@
-# ---------------------------------------------------------------------------
 # GitHub Actions OIDC: lets CI assume a role without any long-lived AWS keys.
 #
-# Bootstrap note: this file is the one chicken-and-egg in the setup. Apply it once
+# Bootstrap note: this module is the one chicken-and-egg in the setup. Apply it once
 # from a workstation with admin credentials; every apply after that runs in CI.
 # If the account already has a GitHub OIDC provider, import it instead of creating
 # a second one (AWS permits only one per URL):
-#   terraform import aws_iam_openid_connect_provider.github \
+#   terraform import module.github_oidc.aws_iam_openid_connect_provider.github \
 #     arn:aws:iam::<account>:oidc-provider/token.actions.githubusercontent.com
-# ---------------------------------------------------------------------------
 
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
@@ -23,7 +21,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 
 # Shared assume-role document builder. `sub` is what pins each role to a specific
 # trigger: without it, any repo on GitHub could assume these roles.
-data "aws_iam_policy_document" "github_assume_plan" {
+data "aws_iam_policy_document" "assume_plan" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
@@ -47,7 +45,7 @@ data "aws_iam_policy_document" "github_assume_plan" {
   }
 }
 
-data "aws_iam_policy_document" "github_assume_apply" {
+data "aws_iam_policy_document" "assume_apply" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
@@ -72,53 +70,59 @@ data "aws_iam_policy_document" "github_assume_apply" {
   }
 }
 
+locals {
+  state_bucket_arns = [
+    "arn:aws:s3:::${var.tf_state_bucket}",
+    "arn:aws:s3:::${var.tf_state_bucket}/*",
+  ]
+
+  lock_table_arn = "arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/${var.tf_lock_table}"
+}
+
 # ---------------------------------------------------------------------------
 # Plan role (pull requests): read everything, plus the state lock.
 # ---------------------------------------------------------------------------
 
-resource "aws_iam_role" "github_plan" {
+resource "aws_iam_role" "plan" {
   name               = "${var.project_name}-gha-plan"
   description        = "Assumed by GitHub Actions on pull requests to run terraform plan."
-  assume_role_policy = data.aws_iam_policy_document.github_assume_plan.json
+  assume_role_policy = data.aws_iam_policy_document.assume_plan.json
 }
 
-resource "aws_iam_role_policy_attachment" "github_plan_readonly" {
-  role       = aws_iam_role.github_plan.name
+resource "aws_iam_role_policy_attachment" "plan_readonly" {
+  role       = aws_iam_role.plan.name
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
-data "aws_iam_policy_document" "github_tf_state" {
+data "aws_iam_policy_document" "plan_state" {
   statement {
-    sid     = "StateObjectRead"
-    actions = ["s3:GetObject", "s3:ListBucket", "s3:GetBucketLocation"]
-    resources = [
-      "arn:aws:s3:::${var.tf_state_bucket}",
-      "arn:aws:s3:::${var.tf_state_bucket}/*",
-    ]
+    sid       = "StateObjectRead"
+    actions   = ["s3:GetObject", "s3:ListBucket", "s3:GetBucketLocation"]
+    resources = local.state_bucket_arns
   }
 
   # plan takes the lock too; without this every PR fails on a lock error.
   statement {
     sid       = "StateLock"
     actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem"]
-    resources = ["arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.tf_lock_table}"]
+    resources = [local.lock_table_arn]
   }
 }
 
-resource "aws_iam_role_policy" "github_plan_state" {
+resource "aws_iam_role_policy" "plan_state" {
   name   = "${var.project_name}-gha-plan-state"
-  role   = aws_iam_role.github_plan.id
-  policy = data.aws_iam_policy_document.github_tf_state.json
+  role   = aws_iam_role.plan.id
+  policy = data.aws_iam_policy_document.plan_state.json
 }
 
 # ---------------------------------------------------------------------------
-# Apply role (main): deploy the stack.
+# Apply role (default branch): deploy the stack.
 # ---------------------------------------------------------------------------
 
-resource "aws_iam_role" "github_apply" {
+resource "aws_iam_role" "apply" {
   name               = "${var.project_name}-gha-apply"
   description        = "Assumed by GitHub Actions on ${var.github_default_branch} to apply Terraform and push images."
-  assume_role_policy = data.aws_iam_policy_document.github_assume_apply.json
+  assume_role_policy = data.aws_iam_policy_document.assume_apply.json
 }
 
 # PowerUserAccess covers every service this stack touches (Lambda, ECR, S3, SQS,
@@ -126,37 +130,34 @@ resource "aws_iam_role" "github_apply" {
 # IAM, which the inline policy below grants narrowly. Enumerating each service action
 # instead would be a large, brittle policy that fails opaquely mid-apply; this trades
 # some breadth for a role that only a push to main can assume.
-resource "aws_iam_role_policy_attachment" "github_apply_poweruser" {
-  role       = aws_iam_role.github_apply.name
+resource "aws_iam_role_policy_attachment" "apply_poweruser" {
+  role       = aws_iam_role.apply.name
   policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
 }
 
-resource "aws_iam_role_policy" "github_apply_state" {
-  name   = "${var.project_name}-gha-apply-state"
-  role   = aws_iam_role.github_apply.id
-  policy = data.aws_iam_policy_document.github_tf_state_write.json
-}
-
-data "aws_iam_policy_document" "github_tf_state_write" {
+data "aws_iam_policy_document" "apply_state" {
   statement {
-    sid     = "StateObjectReadWrite"
-    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket", "s3:GetBucketLocation"]
-    resources = [
-      "arn:aws:s3:::${var.tf_state_bucket}",
-      "arn:aws:s3:::${var.tf_state_bucket}/*",
-    ]
+    sid       = "StateObjectReadWrite"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket", "s3:GetBucketLocation"]
+    resources = local.state_bucket_arns
   }
 
   statement {
     sid       = "StateLock"
     actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem"]
-    resources = ["arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.tf_lock_table}"]
+    resources = [local.lock_table_arn]
   }
+}
+
+resource "aws_iam_role_policy" "apply_state" {
+  name   = "${var.project_name}-gha-apply-state"
+  role   = aws_iam_role.apply.id
+  policy = data.aws_iam_policy_document.apply_state.json
 }
 
 # IAM, scoped to the roles and policies this stack owns. PowerUserAccess grants none
 # of this, so Terraform cannot touch identities outside the project's naming prefix.
-data "aws_iam_policy_document" "github_apply_iam" {
+data "aws_iam_policy_document" "apply_iam" {
   statement {
     sid = "ManageProjectRoles"
     actions = [
@@ -178,13 +179,13 @@ data "aws_iam_policy_document" "github_apply_iam" {
       "iam:UntagRole",
       "iam:ListRoleTags",
     ]
-    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*"]
+    resources = ["arn:aws:iam::${var.aws_account_id}:role/${var.project_name}-*"]
   }
 
   statement {
     sid       = "PassProjectRoles"
     actions   = ["iam:PassRole"]
-    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*"]
+    resources = ["arn:aws:iam::${var.aws_account_id}:role/${var.project_name}-*"]
   }
 
   # Read-only on the OIDC provider so `plan` shows no drift on this file; the provider
@@ -196,22 +197,8 @@ data "aws_iam_policy_document" "github_apply_iam" {
   }
 }
 
-resource "aws_iam_role_policy" "github_apply_iam" {
+resource "aws_iam_role_policy" "apply_iam" {
   name   = "${var.project_name}-gha-apply-iam"
-  role   = aws_iam_role.github_apply.id
-  policy = data.aws_iam_policy_document.github_apply_iam.json
-}
-
-# ---------------------------------------------------------------------------
-# Outputs consumed when configuring the GitHub repository
-# ---------------------------------------------------------------------------
-
-output "github_plan_role_arn" {
-  description = "Set as the GitHub Actions repository variable AWS_PLAN_ROLE_ARN."
-  value       = aws_iam_role.github_plan.arn
-}
-
-output "github_apply_role_arn" {
-  description = "Set as the GitHub Actions repository variable AWS_APPLY_ROLE_ARN."
-  value       = aws_iam_role.github_apply.arn
+  role   = aws_iam_role.apply.id
+  policy = data.aws_iam_policy_document.apply_iam.json
 }

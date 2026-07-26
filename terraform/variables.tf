@@ -1,3 +1,12 @@
+# Root input variables.
+#
+# Terraform requires every root variable to be declared here, so this file covers all
+# domains; the banners below mirror the modules in main.tf that consume them.
+
+# ===========================================================================
+# Core: deployment identity and storage
+# ===========================================================================
+
 variable "image_tag" {
   type        = string
   description = "ECR image tag for all Lambda container images. Set automatically by lambda-build-push.sh via image_tag.auto.tfvars."
@@ -14,51 +23,18 @@ variable "project_name" {
   default     = "finsense"
 }
 
+# --- Storage -----------------------------------------------------------------
+
 variable "bucket_name" {
   type        = string
   description = "Globally unique S3 bucket name for model artifacts. If empty, uses project_name-models-account_id."
   default     = null
 }
 
-variable "sagemaker_image_uri" {
+variable "data_bucket_name" {
   type        = string
-  description = "Hugging Face PyTorch inference DLC image URI for this region. Passed to the training pipeline as its InferenceImageUri parameter; the promoted model package carries it onto the endpoint."
-}
-
-variable "sagemaker_serverless_memory_size_in_mb" {
-  type        = number
-  description = "Memory size for SageMaker Serverless Inference (MB). Valid values are 1024, 2048, 3072, 4096, 5120, or 6144."
-  default     = 2048
-}
-
-variable "sagemaker_serverless_max_concurrency" {
-  type        = number
-  description = "Maximum concurrent invocations for SageMaker Serverless Inference."
-  default     = 10
-}
-
-variable "endpoint_name" {
-  type        = string
-  description = "SageMaker endpoint name (must be unique in the account/region). If null, derived from project_name."
+  description = "Globally unique S3 bucket name for the data pipeline (raw/predictions/pseudo/curated). If null, uses project_name-data-account_id."
   default     = null
-}
-
-variable "cors_allow_origins" {
-  type        = list(string)
-  description = "Allowed origins for API Gateway HTTP API CORS (use specific origins in production)."
-  default     = ["*"]
-}
-
-variable "apigateway_throttle_rate_limit" {
-  type        = number
-  description = "HTTP API stage steady-state requests per second (default route throttling)."
-  default     = 10
-}
-
-variable "apigateway_throttle_burst_limit" {
-  type        = number
-  description = "HTTP API stage short burst capacity (requests); typically >= rate_limit."
-  default     = 20
 }
 
 variable "s3_force_destroy" {
@@ -67,73 +43,17 @@ variable "s3_force_destroy" {
   default     = false
 }
 
-variable "reddit_credentials_secret_arn" {
-  type        = string
-  description = "Optional Secrets Manager ARN; secret must be JSON {\"client_id\":\"...\",\"client_secret\":\"...\"} for Reddit API (include_social). Leave empty to disable Reddit."
-  default     = ""
-}
-
-variable "sentiment_cache_ttl_seconds" {
-  type        = number
-  description = "Unix seconds added to refresh time for DynamoDB expires_at (TTL cleanup)."
-  default     = 604800
-}
-
-variable "rss_overfetch" {
-  type        = number
-  description = "Multiplier applied to max_articles when fetching Google News RSS, so post-filtering can drop noise without starving the result set. Hard-capped to 60 inside the Lambda."
-  default     = 3
-}
-
-variable "sentiment_cache_api_ttl_seconds" {
-  type        = number
-  description = "Unix seconds added to API by-symbol write-back time for DynamoDB expires_at."
-  default     = 86400
-}
-
-variable "top_tickers_json" {
-  type        = string
-  description = "JSON array of tickers stored in SSM at /{project_name}/top-tickers for the ingestion Lambda."
-  default     = "[\"AAPL\",\"MSFT\",\"GOOGL\",\"META\",\"NVDA\"]"
-}
-
-variable "valid_tickers_ssm_param" {
-  type        = string
-  description = "Optional SSM parameter name containing a JSON array of valid ticker symbols used by API validation/suggestions."
-  default     = ""
-}
-
-variable "valid_tickers_json" {
-  type        = string
-  description = "Fallback JSON array of valid ticker symbols for API validation/suggestions when SSM is not used."
-  default     = ""
-}
-
-variable "valid_tickers_cache_ttl_seconds" {
-  type        = number
-  description = "In-memory cache TTL (seconds) for the valid ticker universe inside Lambda execution environments."
-  default     = 900
-}
-
-variable "valid_tickers_file" {
-  type        = string
-  description = "Path to a packaged ticker JSON file readable by Lambda. Relative paths resolve against finsense_shared/tickers/data/ inside the image."
-  default     = "valid_tickers_us.json"
-}
-
-# --- Data bucket + daily ingestion / pseudo-labeling pipeline ---------------
-
-variable "data_bucket_name" {
-  type        = string
-  description = "Globally unique S3 bucket name for the data pipeline (raw/predictions/pseudo/curated). If null, uses project_name-data-account_id."
-  default     = null
-}
-
 variable "data_retention_days" {
   type        = number
   description = "Lifecycle expiration (days) for raw/ and predictions/ partitions. Pseudo/curated are retained indefinitely. Set to 0 to disable."
   default     = 90
 }
+
+# ===========================================================================
+# Ingestion pipeline (modules/pipeline)
+# ===========================================================================
+
+# --- Ingestion ---------------------------------------------------------------
 
 variable "ingestion_schedule" {
   type        = string
@@ -153,10 +73,37 @@ variable "ingestion_include_social" {
   default     = true
 }
 
+variable "top_tickers_json" {
+  type        = string
+  description = "JSON array of tickers stored in SSM at /{project_name}/top-tickers for the ingestion Lambda."
+  default     = "[\"AAPL\",\"MSFT\",\"GOOGL\",\"META\",\"NVDA\"]"
+}
+
+# Shared with the API's sentiment Lambda, which fetches the same feeds on demand.
+variable "rss_overfetch" {
+  type        = number
+  description = "Multiplier applied to max_articles when fetching Google News RSS, so post-filtering can drop noise without starving the result set. Hard-capped to 60 inside the Lambda."
+  default     = 3
+}
+
+variable "reddit_credentials_secret_arn" {
+  type        = string
+  description = "Optional Secrets Manager ARN; secret must be JSON {\"client_id\":\"...\",\"client_secret\":\"...\"} for Reddit API (include_social). Leave empty to disable Reddit."
+  default     = ""
+}
+
+# --- Prediction --------------------------------------------------------------
+
 variable "sagemaker_batch_size" {
   type        = number
   description = "Batch size the prediction Lambda uses per InvokeEndpoint call."
   default     = 32
+}
+
+variable "sentiment_cache_ttl_seconds" {
+  type        = number
+  description = "Unix seconds added to refresh time for DynamoDB expires_at (TTL cleanup)."
+  default     = 604800
 }
 
 variable "low_conf_top_prob" {
@@ -170,6 +117,8 @@ variable "low_conf_margin" {
   description = "Minimum margin (top-prob - runner-up) required for a confident prediction; 0 disables the margin gate."
   default     = 0.0
 }
+
+# --- Pseudo-labeling ---------------------------------------------------------
 
 variable "llm_provider" {
   type        = string
@@ -223,6 +172,8 @@ variable "google_secret_arn" {
   default     = ""
 }
 
+# --- Sizing ------------------------------------------------------------------
+
 variable "collect_lambda_memory_mb" {
   type        = number
   description = "Memory (MB) for the per-symbol collect Lambda."
@@ -241,24 +192,97 @@ variable "label_lambda_memory_mb" {
   default     = 512
 }
 
-# --- SageMaker training pipeline --------------------------------------------
+# ===========================================================================
+# HTTP API (modules/api)
+# ===========================================================================
 
-variable "pipeline_name" {
+variable "cors_allow_origins" {
+  type        = list(string)
+  description = "Allowed origins for API Gateway HTTP API CORS (use specific origins in production)."
+  default     = ["*"]
+}
+
+variable "apigateway_throttle_rate_limit" {
+  type        = number
+  description = "HTTP API stage steady-state requests per second (default route throttling)."
+  default     = 10
+}
+
+variable "apigateway_throttle_burst_limit" {
+  type        = number
+  description = "HTTP API stage short burst capacity (requests); typically >= rate_limit."
+  default     = 20
+}
+
+variable "sentiment_cache_api_ttl_seconds" {
+  type        = number
+  description = "Unix seconds added to API by-symbol write-back time for DynamoDB expires_at."
+  default     = 86400
+}
+
+# --- Ticker universe ---------------------------------------------------------
+# Resolution order inside the Lambdas: SSM parameter, then inline JSON, then the
+# file packaged in the image.
+
+variable "valid_tickers_ssm_param" {
   type        = string
-  description = "SageMaker Pipeline name. If null, derived from project_name."
+  description = "Optional SSM parameter name containing a JSON array of valid ticker symbols used by API validation/suggestions."
+  default     = ""
+}
+
+variable "valid_tickers_json" {
+  type        = string
+  description = "Fallback JSON array of valid ticker symbols for API validation/suggestions when SSM is not used."
+  default     = ""
+}
+
+variable "valid_tickers_file" {
+  type        = string
+  description = "Path to a packaged ticker JSON file readable by Lambda. Relative paths resolve against finsense_shared/tickers/data/ inside the image."
+  default     = "valid_tickers_us.json"
+}
+
+variable "valid_tickers_cache_ttl_seconds" {
+  type        = number
+  description = "In-memory cache TTL (seconds) for the valid ticker universe inside Lambda execution environments."
+  default     = 900
+}
+
+# ===========================================================================
+# SageMaker: endpoint, registry, training pipeline (modules/sagemaker)
+# ===========================================================================
+
+# --- Inference endpoint ------------------------------------------------------
+
+variable "sagemaker_image_uri" {
+  type        = string
+  description = "Hugging Face PyTorch inference DLC image URI for this region. Passed to the training pipeline as its InferenceImageUri parameter; the promoted model package carries it onto the endpoint."
+}
+
+variable "endpoint_name" {
+  type        = string
+  description = "SageMaker endpoint name (must be unique in the account/region). If null, derived from project_name."
   default     = null
 }
+
+variable "sagemaker_serverless_memory_size_in_mb" {
+  type        = number
+  description = "Memory size for SageMaker Serverless Inference (MB). Valid values are 1024, 2048, 3072, 4096, 5120, or 6144."
+  default     = 2048
+}
+
+variable "sagemaker_serverless_max_concurrency" {
+  type        = number
+  description = "Maximum concurrent invocations for SageMaker Serverless Inference."
+  default     = 10
+}
+
+# --- Model registry ----------------------------------------------------------
 
 variable "model_package_group_name" {
   type        = string
   description = "SageMaker Model Package Group name for registered model versions."
   default     = "finsense-sentiment"
-}
-
-variable "pipeline_macro_f1_threshold" {
-  type        = number
-  description = "Minimum macro F1 required by the pipeline ConditionStep to register a model. Passed to scheduled runs as the MacroF1Threshold pipeline parameter."
-  default     = 0.80
 }
 
 variable "model_versions_to_keep" {
@@ -270,6 +294,20 @@ variable "model_versions_to_keep" {
     condition     = var.model_versions_to_keep >= 1
     error_message = "model_versions_to_keep must be at least 1 so the live endpoint config is never pruned."
   }
+}
+
+# --- Training pipeline -------------------------------------------------------
+
+variable "pipeline_name" {
+  type        = string
+  description = "SageMaker Pipeline name. If null, derived from project_name."
+  default     = null
+}
+
+variable "pipeline_macro_f1_threshold" {
+  type        = number
+  description = "Minimum macro F1 required by the pipeline ConditionStep to register a model. Passed to scheduled runs as the MacroF1Threshold pipeline parameter."
+  default     = 0.80
 }
 
 variable "retrain_schedule" {
@@ -290,7 +328,9 @@ variable "retrain_training_instance_type" {
   default     = "ml.g4dn.xlarge"
 }
 
-# --- GitHub Actions OIDC ------------------------------------------------------
+# ===========================================================================
+# GitHub Actions OIDC (modules/github-oidc)
+# ===========================================================================
 
 variable "github_repository" {
   type        = string

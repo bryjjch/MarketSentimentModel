@@ -3,7 +3,7 @@ name: deploy
 # Pull requests get a plan posted as a comment; merging to main builds images,
 # applies Terraform, and upserts the SageMaker Pipeline.
 #
-# One-time setup (see terraform/github_oidc.tf):
+# One-time setup (see terraform/modules/github-oidc/):
 #   terraform apply from a workstation once to create the OIDC provider and roles, then
 #   set these GitHub Actions *repository variables*:
 #     AWS_REGION            e.g. us-east-1

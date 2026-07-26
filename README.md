@@ -7,7 +7,7 @@ FinSense is a financial sentiment analysis stack built around a fine-tuned FinBE
 | Path | Purpose |
 |------|---------|
 | `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, inference, metrics, run manifests |
-| `terraform/` | AWS resources (buckets, IAM, API Gateway, Lambdas, SQS, DynamoDB, EventBridge, ECR, CI OIDC roles) |
+| `terraform/` | AWS resources, split into modules for storage, queues, the ingestion pipeline, the HTTP API, SageMaker and CI OIDC roles (see `terraform/README.md`) |
 | `.github/workflows/` | `deploy.yml` (plan on PR, apply on merge) and `train.yml` (manual training / promotion) |
 | `src/sagemaker/` | SageMaker serving handler and training pipeline (build script, processing scripts, training entry points) |
 | `src/lambdas/` | Lambda handlers and shared `finsense_shared` code layer |
@@ -71,7 +71,7 @@ This loop continuously expands the labeled training corpus without manual annota
 
 ### Deployment is a push, not a checklist
 
-Pushing to `main` runs `.github/workflows/deploy.yml`, which builds and pushes the nine Lambda images, applies Terraform, and upserts the SageMaker Pipeline. Pull requests get a `terraform plan` posted as a comment. CI authenticates with GitHub OIDC (`terraform/github_oidc.tf`) — there are no AWS keys anywhere.
+Pushing to `main` runs `.github/workflows/deploy.yml`, which builds and pushes the nine Lambda images, applies Terraform, and upserts the SageMaker Pipeline. Pull requests get a `terraform plan` posted as a comment. CI authenticates with GitHub OIDC (`terraform/modules/github-oidc/`) — there are no AWS keys anywhere.
 
 Three things deliberately stay outside Terraform:
 
