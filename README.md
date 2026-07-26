@@ -14,7 +14,7 @@ FinSense is a financial sentiment analysis stack built around a fine-tuned FinBE
 | `scripts/` | Local build helpers and the one-time `migrate-state-to-ci.sh` |
 | `frontend/` | React + TypeScript + Vite UI for cache list / heatmap |
 | `notebooks/` | Exploratory / demonstration notebooks |
-| `data/` | Default download location for Financial PhraseBank (created on first use) |
+| `data/` | Local download location for Financial PhraseBank, used by the notebooks (created on first use). Cloud training reads the copy in S3 instead |
 | `tests/` | Pytest suite |
 
 ## Architecture decisions
@@ -51,10 +51,18 @@ This loop continuously expands the labeled training corpus without manual annota
 
 Pushing to `main` runs `.github/workflows/deploy.yml`, which builds and pushes the nine Lambda images, applies Terraform, and upserts the SageMaker Pipeline. Pull requests get a `terraform plan` posted as a comment. CI authenticates with GitHub OIDC (`terraform/github_oidc.tf`) — there are no AWS keys anywhere.
 
-Two things deliberately stay outside Terraform, because both change out of band:
+Three things deliberately stay outside Terraform:
 
 - **The training pipeline.** Compiling its definition uploads `sourcedir.tar.gz` to S3 and embeds the role ARN Terraform creates, so it can only be built *after* an apply. CI runs `build_pipeline.py --upsert` as a post-apply step.
 - **The SageMaker model, endpoint config and endpoint.** These are created by the `model_promote` Lambda. Describing them in Terraform would mean every deploy needed the 405 MB `model.tar.gz` on disk, and every retrain would surface as drift.
+- **The Financial PhraseBank corpus.** It is seeded once into `s3://<data bucket>/reference/phrasebank/` and read from there by the pipeline's `PhraseBankS3Prefix` input. A Terraform-managed upload would call `filemd5()` on a local copy during *every* plan, which no CI runner has.
+
+Seeding it is a one-off, from any machine that has the corpus:
+
+```bash
+aws s3 cp data/FinancialPhraseBank-v1.0/FinancialPhraseBank-v1.0/Sentences_75Agree.txt \
+  "s3://$(terraform -chdir=terraform output -raw data_bucket_name)/reference/phrasebank/"
+```
 
 Lambda images are tagged with the git tree hash of `src/lambdas` rather than the commit SHA, so a Terraform-only commit reuses the existing tag and rebuilds nothing.
 

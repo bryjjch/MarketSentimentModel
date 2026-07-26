@@ -171,12 +171,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
   depends_on = [aws_s3_bucket_versioning.data]
 }
 
-resource "aws_s3_object" "phrasebank" {
-  bucket                 = aws_s3_bucket.data.id
-  key                    = "reference/phrasebank/${basename(var.phrasebank_path)}"
-  source                 = abspath(var.phrasebank_path)
-  etag                   = filemd5(abspath(var.phrasebank_path))
-  server_side_encryption = "AES256"
+# The Financial PhraseBank corpus lives at s3://<data bucket>/reference/phrasebank/ and is
+# seeded once by hand (see README). Terraform used to upload it from a local path, but
+# `filemd5()` reads that file on every plan, so CI — which has no copy of a licence-gated
+# 466 KB corpus — could not plan at all. The pipeline reads the whole prefix as a
+# ProcessingInput (PhraseBankS3Prefix), so it never needed a Terraform-managed object.
+#
+# `destroy = false` makes Terraform forget the object instead of deleting it from S3.
+# Safe to delete this block once it has been applied on main.
+removed {
+  from = aws_s3_object.phrasebank
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 # ---------------------------------------------------------------------------
