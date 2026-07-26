@@ -22,10 +22,12 @@ dist/
 *.egg-info/
 
 # Virtual environments & local secrets
+# Leading slashes matter: unanchored "env/" matches a directory named env at ANY
+# depth, which silently swallowed terraform/env/prod.tfvars.
 .env
 .venv
-venv/
-env/
+/venv/
+/env/
 
 # Tests & coverage
 .pytest_cache/
