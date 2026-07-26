@@ -1,9 +1,9 @@
-"""Shared primitives packaged as a Lambda Layer for Finsense ingestion/prediction/pseudo-label Lambdas.
-"""
+"""Shared primitives copied into every FinSense Lambda container image."""
 
 from __future__ import annotations
 
 from .aggregate import aggregate_predictions, sentiment_score_from_probabilities
+from .cache_item import build_cache_item, recent_headlines, to_ddb_number
 from .confidence import (
     ConfidenceMetric,
     confidence_from_probabilities,
@@ -24,6 +24,7 @@ from .valid_tickers import load_valid_ticker_set, load_valid_tickers, search_tic
 __all__ = [
     "ConfidenceMetric",
     "aggregate_predictions",
+    "build_cache_item",
     "confidence_from_probabilities",
     "curated_key",
     "dt_from_key",
@@ -36,6 +37,8 @@ __all__ = [
     "prediction_key",
     "pseudo_label_key",
     "raw_key",
+    "recent_headlines",
     "search_tickers_by_prefix",
     "sentiment_score_from_probabilities",
+    "to_ddb_number",
 ]

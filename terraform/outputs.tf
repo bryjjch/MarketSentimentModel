@@ -18,13 +18,8 @@ output "sagemaker_endpoint_arn" {
 }
 
 output "http_api_invoke_url" {
-  description = "Base URL for the HTTP API (POST {url}/predict)"
+  description = "Base URL for the HTTP API"
   value       = aws_apigatewayv2_stage.default.invoke_url
-}
-
-output "predict_url" {
-  description = "Full URL for POST /predict"
-  value       = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/predict"
 }
 
 output "sentiment_by_symbol_url" {
@@ -57,24 +52,24 @@ output "data_bucket_name" {
   value       = aws_s3_bucket.data.bucket
 }
 
-output "ingestion_function_name" {
-  description = "Daily ingestion Lambda (EventBridge cron target)."
-  value       = aws_lambda_function.ingestion.function_name
+output "pipeline_dispatch_function_name" {
+  description = "Dispatch Lambda (EventBridge cron target); enqueues one collect task per ticker."
+  value       = aws_lambda_function.pipeline_dispatch.function_name
 }
 
-output "ingestion_prediction_function_name" {
-  description = "Ingestion-prediction Lambda invoked per-ticker by the ingestion fan-out."
-  value       = aws_lambda_function.ingestion_prediction.function_name
+output "pipeline_queue_urls" {
+  description = "SQS queue URLs between pipeline stages (collect -> predict -> label; cache-write is shared with the API)."
+  value = {
+    collect     = aws_sqs_queue.collect.url
+    predict     = aws_sqs_queue.predict.url
+    label       = aws_sqs_queue.label.url
+    cache_write = aws_sqs_queue.cache_write.url
+  }
 }
 
-output "pseudo_label_function_name" {
-  description = "Pseudo-label Lambda invoked by the prediction Lambda for low-confidence rows."
-  value       = aws_lambda_function.pseudo_label.function_name
-}
-
-output "ingestion_rule_name" {
-  description = "EventBridge rule name for the daily ingestion fan-out."
-  value       = aws_cloudwatch_event_rule.ingestion.name
+output "pipeline_dispatch_rule_name" {
+  description = "EventBridge rule name for the daily pipeline dispatch."
+  value       = aws_cloudwatch_event_rule.pipeline_dispatch.name
 }
 
 output "pipeline_name" {
