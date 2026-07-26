@@ -7,7 +7,8 @@ import logging
 import os
 from pathlib import Path
 
-from .symbol import normalize_symbol
+from .symbols import normalize_symbol
+from .universe import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ def _resolve_path() -> Path:
     override = os.environ.get("TICKER_NAMES_FILE", "").strip()
     if override:
         return Path(override)
-    return Path(__file__).resolve().parent / _DEFAULT_FILENAME
+    return DATA_DIR / _DEFAULT_FILENAME
 
 
 def _fingerprint() -> str:

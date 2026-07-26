@@ -1,7 +1,7 @@
 """GET /tickers/suggest — ticker autocomplete by prefix over the valid-ticker universe.
 
 Touches no DynamoDB: the universe comes from SSM / env / the packaged JSON file via
-``finsense_shared.valid_tickers``.
+``finsense_shared.tickers.universe``.
 """
 
 from __future__ import annotations

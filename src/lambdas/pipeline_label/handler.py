@@ -39,10 +39,10 @@ from datetime import date
 from typing import Any
 
 from finsense_shared import curated_key, dt_from_key, pseudo_label_key
+from finsense_shared.aws.s3 import read_jsonl, write_jsonl
+from finsense_shared.aws.sqs import iter_records
 from finsense_shared.llm_label import pseudo_label_text
-from finsense_shared.messages import TASK_LABEL, validate_task
-from finsense_shared.s3io import read_jsonl, write_jsonl
-from finsense_shared.sqs import iter_records
+from finsense_shared.pipeline import TASK_LABEL, validate_task
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

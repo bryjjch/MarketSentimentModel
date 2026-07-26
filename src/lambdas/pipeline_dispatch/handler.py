@@ -21,8 +21,8 @@ from typing import Any
 from botocore.exceptions import ClientError
 
 from finsense_shared import normalize_symbol
-from finsense_shared.messages import build_collect_task
-from finsense_shared.sqs import send_json
+from finsense_shared.aws.sqs import send_json
+from finsense_shared.pipeline import build_collect_task
 from finsense_shared.tickers import load_tickers
 
 logger = logging.getLogger()

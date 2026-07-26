@@ -20,12 +20,12 @@ from finsense_shared import (
     normalize_symbol,
     recent_headlines,
 )
+from finsense_shared.aws.sagemaker import invoke_predict
+from finsense_shared.aws.sqs import send_json
 from finsense_shared.http import parse_json_body, response
-from finsense_shared.messages import build_cache_write_task
-from finsense_shared.sagemaker import invoke_predict
+from finsense_shared.pipeline import build_cache_write_task
 from finsense_shared.sources import collect_for_symbol
 from finsense_shared.sources.base import CollectedItem
-from finsense_shared.sqs import send_json
 
 ENDPOINT_NAME = os.environ["SAGEMAKER_ENDPOINT_NAME"]
 RECENT_HEADLINES_MAX = int(os.environ.get("RECENT_HEADLINES_MAX", "10"))

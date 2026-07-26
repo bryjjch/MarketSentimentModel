@@ -31,11 +31,11 @@ from finsense_shared import (
     prediction_key,
     recent_headlines,
 )
-from finsense_shared.aggregate import aggregate_predictions
-from finsense_shared.messages import TASK_PREDICT, build_cache_write_task, build_label_task, validate_task
-from finsense_shared.s3io import read_jsonl, write_jsonl
-from finsense_shared.sagemaker import invoke_predict
-from finsense_shared.sqs import iter_records, send_json
+from finsense_shared.aws.s3 import read_jsonl, write_jsonl
+from finsense_shared.aws.sagemaker import invoke_predict
+from finsense_shared.aws.sqs import iter_records, send_json
+from finsense_shared.pipeline import TASK_PREDICT, build_cache_write_task, build_label_task, validate_task
+from finsense_shared.sentiment import aggregate_predictions
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

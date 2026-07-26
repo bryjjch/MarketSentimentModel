@@ -18,8 +18,8 @@ import boto3
 from botocore.exceptions import ClientError
 
 from finsense_shared import build_cache_item
-from finsense_shared.messages import TASK_CACHE_WRITE, validate_task
-from finsense_shared.sqs import batch_failures, iter_records
+from finsense_shared.aws.sqs import batch_failures, iter_records
+from finsense_shared.pipeline import TASK_CACHE_WRITE, validate_task
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

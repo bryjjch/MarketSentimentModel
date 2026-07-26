@@ -3,15 +3,19 @@
 
 Usage
 -----
+PYTHONPATH must point at ``src/sagemaker`` (not ``src``): the installed SageMaker
+SDK owns the top-level ``sagemaker`` name, so this package must be imported as
+plain ``pipeline``.
+
 Generate JSON for Terraform deployment (offline, no AWS calls):
 
-    PYTHONPATH=src python -m sagemaker.pipeline.build_pipeline \\
+    PYTHONPATH=src/sagemaker python -m pipeline.build_pipeline \\
         --role arn:aws:iam::123456789012:role/SageMakerPipelineRole \\
         --output terraform/pipeline_definition.json
 
 Upsert the pipeline directly to SageMaker:
 
-    PYTHONPATH=src python -m sagemaker.pipeline.build_pipeline \\
+    PYTHONPATH=src/sagemaker python -m pipeline.build_pipeline \\
         --role arn:aws:iam::123456789012:role/SageMakerPipelineRole \\
         --upsert
 """

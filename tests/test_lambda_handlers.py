@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
-import finsense_shared.messages as messages
+import finsense_shared.pipeline as pipeline
 from finsense_shared.http import parse_json_body, parse_limit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +33,7 @@ class FakeS3:
 
 
 class FakeSQSClient:
-    """Records send_message calls; monkeypatched over finsense_shared.sqs._client."""
+    """Records send_message calls; monkeypatched over finsense_shared.aws.sqs._client."""
 
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
@@ -143,7 +143,7 @@ class FakeDDBResource:
 @pytest.fixture
 def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3:
     fake = FakeS3()
-    import finsense_shared.s3io as s3io
+    import finsense_shared.aws.s3 as s3io
 
     monkeypatch.setattr(s3io, "_client", lambda: fake)
     return fake
@@ -152,7 +152,7 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3:
 @pytest.fixture
 def fake_sqs(monkeypatch: pytest.MonkeyPatch) -> FakeSQSClient:
     fake = FakeSQSClient()
-    import finsense_shared.sqs as sqs
+    import finsense_shared.aws.sqs as sqs
 
     monkeypatch.setattr(sqs, "_client", lambda: fake)
     return fake
@@ -275,7 +275,7 @@ def test_collect_writes_raw_partition_and_enqueues_predict_task(
         ],
     )
 
-    task = messages.build_collect_task("run-1", "AAPL", max_articles=5, include_social=False)
+    task = pipeline.build_collect_task("run-1", "AAPL", max_articles=5, include_social=False)
     result = handler.lambda_handler(_sqs_event(task), None)["results"][0]
 
     assert result["count"] == 1
@@ -308,7 +308,7 @@ def test_collect_empty_result_does_not_enqueue_predict(
     )
     monkeypatch.setattr(handler, "collect_for_symbol", lambda symbol, max_articles, include_social: [])
 
-    task = messages.build_collect_task("run-1", "AAPL", max_articles=5, include_social=False)
+    task = pipeline.build_collect_task("run-1", "AAPL", max_articles=5, include_social=False)
     result = handler.lambda_handler(_sqs_event(task), None)["results"][0]
 
     assert result["count"] == 0
@@ -327,7 +327,7 @@ def test_predict_lambda_splits_high_and_low_confidence(
     fake_sqs: FakeSQSClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import finsense_shared.sagemaker as sm
+    import finsense_shared.aws.sagemaker as sm
 
     fake_sm = FakeSageMakerRuntime()
     monkeypatch.setattr(sm, "_client", lambda region=None: fake_sm)
@@ -357,7 +357,7 @@ def test_predict_lambda_splits_high_and_low_confidence(
         "pipeline_predict",
     )
 
-    task = messages.build_predict_task("run-1", "AAPL", bucket="data-bucket", key=raw_key, count=4)
+    task = pipeline.build_predict_task("run-1", "AAPL", bucket="data-bucket", key=raw_key, count=4)
     result = handler.lambda_handler(_sqs_event(task), None)["results"][0]
 
     assert result["predictions"] == 4
@@ -417,7 +417,7 @@ def test_label_lambda_pointer_form_reads_rows_from_predictions(fake_s3: FakeS3) 
         "pipeline_label",
     )
 
-    task = messages.build_label_task(
+    task = pipeline.build_label_task(
         "run-1",
         "AAPL",
         bucket="data-bucket",
@@ -504,7 +504,7 @@ def test_cache_write_puts_item_with_ttl(monkeypatch: pytest.MonkeyPatch) -> None
     table = FakeConditionalTable()
     handler = _cache_write_handler(monkeypatch, table)
 
-    task = messages.build_cache_write_task(
+    task = pipeline.build_cache_write_task(
         "AAPL",
         score=0.42,
         label="positive",
@@ -530,7 +530,7 @@ def test_cache_write_skips_stale_message_without_failing(monkeypatch: pytest.Mon
     table.rows["AAPL"] = {"symbol": "AAPL", "label": "positive", "updated_at": 2_000_000_000}
     handler = _cache_write_handler(monkeypatch, table)
 
-    stale = messages.build_cache_write_task(
+    stale = pipeline.build_cache_write_task(
         "AAPL",
         score=-0.5,
         label="negative",
@@ -551,7 +551,7 @@ def test_cache_write_reports_partial_batch_failures(monkeypatch: pytest.MonkeyPa
     table = FakeConditionalTable()
     handler = _cache_write_handler(monkeypatch, table)
 
-    good = messages.build_cache_write_task(
+    good = pipeline.build_cache_write_task(
         "AAPL",
         score=0.1,
         label="neutral",
@@ -575,7 +575,7 @@ def test_cache_write_reports_partial_batch_failures(monkeypatch: pytest.MonkeyPa
 
 
 def _api_sentiment_handler(monkeypatch: pytest.MonkeyPatch, runtime: Any) -> Any:
-    import finsense_shared.sagemaker as sm
+    import finsense_shared.aws.sagemaker as sm
 
     monkeypatch.setattr(sm, "_client", lambda region=None: runtime)
     return _reload_handler(
@@ -781,7 +781,7 @@ def test_ticker_suggestions_requires_query() -> None:
 
 
 # ---------------------------------------------------------------------------
-# finsense_shared.http / finsense_shared.messages units
+# finsense_shared.http / finsense_shared.pipeline units
 # ---------------------------------------------------------------------------
 
 
@@ -805,11 +805,11 @@ def test_parse_limit_validation() -> None:
 
 
 def test_validate_task_rejects_malformed_payloads() -> None:
-    good = messages.build_predict_task("run-1", "AAPL", bucket="b", key="k", count=1)
-    assert messages.validate_task(good, messages.TASK_PREDICT) is good
+    good = pipeline.build_predict_task("run-1", "AAPL", bucket="b", key="k", count=1)
+    assert pipeline.validate_task(good, pipeline.TASK_PREDICT) is good
     with pytest.raises(ValueError):
-        messages.validate_task(good, messages.TASK_COLLECT)
+        pipeline.validate_task(good, pipeline.TASK_COLLECT)
     with pytest.raises(ValueError):
-        messages.validate_task({"task": "predict", "run_id": "run-1"}, messages.TASK_PREDICT)
+        pipeline.validate_task({"task": "predict", "run_id": "run-1"}, pipeline.TASK_PREDICT)
     with pytest.raises(ValueError):
-        messages.validate_task("not a dict", messages.TASK_PREDICT)
+        pipeline.validate_task("not a dict", pipeline.TASK_PREDICT)

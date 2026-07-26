@@ -18,9 +18,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from finsense_shared import normalize_symbol, raw_key
-from finsense_shared.messages import TASK_COLLECT, build_predict_task, validate_task
-from finsense_shared.s3io import write_jsonl
-from finsense_shared.sqs import iter_records, send_json
+from finsense_shared.aws.s3 import write_jsonl
+from finsense_shared.aws.sqs import iter_records, send_json
+from finsense_shared.pipeline import TASK_COLLECT, build_predict_task, validate_task
 from finsense_shared.sources import collect_for_symbol
 
 logger = logging.getLogger()

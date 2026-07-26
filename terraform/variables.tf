@@ -128,7 +128,7 @@ variable "valid_tickers_cache_ttl_seconds" {
 
 variable "valid_tickers_file" {
   type        = string
-  description = "Optional path to a packaged ticker JSON file readable by Lambda (e.g. /opt/python/finsense_shared/valid_tickers_us.json)."
+  description = "Optional path to a packaged ticker JSON file readable by Lambda (e.g. /var/task/finsense_shared/tickers/data/valid_tickers_us.json). Bare filenames resolve against that data directory."
   default     = ""
 }
 
