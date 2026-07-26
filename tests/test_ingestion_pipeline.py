@@ -9,6 +9,7 @@ from types import ModuleType
 
 import pytest
 
+import finsense_shared.tickers.universe as universe
 from finsense_shared import (
     confidence_from_probabilities,
     curated_key,
@@ -20,9 +21,8 @@ from finsense_shared import (
     raw_key,
     search_tickers_by_prefix,
 )
-import finsense_shared.valid_tickers as valid_tickers
-from finsense_shared.confidence import ConfidenceMetric
 from finsense_shared.llm_label import LABEL_ID_TO_STR, SYSTEM_PROMPT, normalize_label, pseudo_label_text
+from finsense_shared.sentiment import ConfidenceMetric
 
 
 class _FakeS3:
@@ -87,20 +87,20 @@ def test_valid_ticker_loader_from_json_and_prefix(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("VALID_TICKERS_SSM_PARAM", "")
     monkeypatch.setenv("VALID_TICKERS_FILE", "")
     monkeypatch.setenv("VALID_TICKERS_JSON", "[\"aapl\", \"MSFT\", \"AAPL\", \"META\"]")
-    valid_tickers.load_valid_tickers(force_reload=True)
+    universe.load_valid_tickers(force_reload=True)
 
-    loaded = valid_tickers.load_valid_tickers()
+    loaded = universe.load_valid_tickers()
     assert loaded == ("AAPL", "META", "MSFT")
-    assert "AAPL" in valid_tickers.load_valid_ticker_set()
+    assert "AAPL" in universe.load_valid_ticker_set()
     assert search_tickers_by_prefix("aa", limit=5) == ["AAPL"]
 
 
-def test_s3io_write_and_read_jsonl() -> None:
-    from finsense_shared import s3io
+def test_s3_write_and_read_jsonl() -> None:
+    from finsense_shared.aws import s3
 
     fake = _FakeS3()
     rows = [{"a": 1}, {"b": "two"}, {"nested": {"k": 3}}]
-    n = s3io.write_jsonl("mybucket", "raw/dt=2026-04-23/symbol=AAPL/run-1.jsonl", rows, client=fake)
+    n = s3.write_jsonl("mybucket", "raw/dt=2026-04-23/symbol=AAPL/run-1.jsonl", rows, client=fake)
     assert n == 3
     stored = fake.objects[("mybucket", "raw/dt=2026-04-23/symbol=AAPL/run-1.jsonl")]
     body = stored["Body"]
@@ -109,7 +109,7 @@ def test_s3io_write_and_read_jsonl() -> None:
     assert stored["ContentType"] == "application/x-ndjson"
     assert stored["ServerSideEncryption"] == "AES256"
 
-    got = list(s3io.read_jsonl("mybucket", "raw/dt=2026-04-23/symbol=AAPL/run-1.jsonl", client=fake))
+    got = list(s3.read_jsonl("mybucket", "raw/dt=2026-04-23/symbol=AAPL/run-1.jsonl", client=fake))
     assert got == rows
 
 

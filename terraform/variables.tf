@@ -72,12 +72,6 @@ variable "apigateway_throttle_burst_limit" {
   default     = 20
 }
 
-variable "lambda_reserved_concurrent_executions" {
-  type        = number
-  description = "Reserved concurrent executions for the predict Lambda (caps invocations in parallel). Use -1 for no reservation. Align with sagemaker_serverless_max_concurrency."
-  default     = 5
-}
-
 variable "s3_force_destroy" {
   type        = bool
   description = "If true, empty and delete the model bucket on terraform destroy (dev only)."
@@ -134,7 +128,7 @@ variable "valid_tickers_cache_ttl_seconds" {
 
 variable "valid_tickers_file" {
   type        = string
-  description = "Path to a packaged ticker JSON file readable by Lambda. Relative paths resolve against the finsense_shared package directory inside the image."
+  description = "Path to a packaged ticker JSON file readable by Lambda. Relative paths resolve against finsense_shared/tickers/data/ inside the image."
   default     = "valid_tickers_us.json"
 }
 
@@ -204,6 +198,30 @@ variable "llm_model" {
   default     = ""
 }
 
+variable "llm_temperature" {
+  type        = number
+  description = "Sampling temperature for the pseudo-labeling LLM."
+  default     = 0.0
+}
+
+variable "llm_timeout_s" {
+  type        = number
+  description = "Per-request timeout (seconds) for the pseudo-labeling LLM."
+  default     = 15
+}
+
+variable "llm_max_chars" {
+  type        = number
+  description = "Maximum input characters sent to the pseudo-labeling LLM per row."
+  default     = 4000
+}
+
+variable "llm_seed" {
+  type        = number
+  description = "Deterministic seed passed to the pseudo-labeling LLM where supported."
+  default     = 42
+}
+
 variable "openai_secret_arn" {
   type        = string
   description = "Optional Secrets Manager ARN for OpenAI API key (JSON with {\"api_key\":\"...\"}). Leave empty to disable."
@@ -216,21 +234,21 @@ variable "google_secret_arn" {
   default     = ""
 }
 
-variable "ingestion_lambda_memory_mb" {
+variable "collect_lambda_memory_mb" {
   type        = number
-  description = "Memory (MB) for the daily ingestion Lambda."
+  description = "Memory (MB) for the per-symbol collect Lambda."
   default     = 512
 }
 
-variable "prediction_lambda_memory_mb" {
+variable "predict_lambda_memory_mb" {
   type        = number
-  description = "Memory (MB) for the prediction Lambda."
+  description = "Memory (MB) for the predict Lambda."
   default     = 512
 }
 
-variable "pseudo_label_lambda_memory_mb" {
+variable "label_lambda_memory_mb" {
   type        = number
-  description = "Memory (MB) for the pseudo-label Lambda."
+  description = "Memory (MB) for the LLM label Lambda."
   default     = 512
 }
 

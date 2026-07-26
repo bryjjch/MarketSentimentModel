@@ -1,116 +1,76 @@
-"""Prediction Lambda: read one raw partition, run SageMaker, split high/low confidence.
+"""Predict Lambda: read one raw partition, run SageMaker, split high/low confidence.
 
-Invocation payload (from the ingestion Lambda)::
-
-    {
-      "run_id": "2026-04-23-abcd1234",
-      "symbol": "AAPL",
-      "bucket": "finsense-data-...",
-      "key": "raw/dt=2026-04-23/symbol=AAPL/<run_id>.jsonl",
-      "count": 12
-    }
+Consumes predict tasks from SQS (batch size 1); a direct invoke with the same payload
+shape is accepted for manual replays.
 
 Outputs:
   * ``predictions/dt=.../symbol=.../<run_id>.jsonl`` — one row per input text with model
     probabilities + confidence metric.
   * ``curated/dt=.../symbol=.../<run_id>.jsonl`` — **high-confidence** rows only (model
     label trusted) so downstream training has immediate labeled data.
-  * Async fan-out to the pseudo-label Lambda with the list of **low-confidence** row
-    indices. That Lambda will emit ``pseudo/`` + merge into ``curated/`` with LLM labels.
-
-DynamoDB write: this Lambda also refreshes the per-symbol ``sentiment_cache`` row so the
-existing ``GET /sentiment/cache/{symbol}`` API keeps serving data without any extra
-Lambda. The old scheduled sentiment_refresh Lambda (which did
-``collect -> predict -> PutItem`` once per ticker) has been removed; this function
-does the same work as part of the daily ingestion fan-out.
+  * A label task on the label queue with the **low-confidence** row indices (pointer
+    form — the label Lambda re-reads the rows from the predictions object).
+  * A cache-write task on the cache-write queue with the aggregated per-symbol
+    sentiment; the cache_write Lambda owns the DynamoDB write.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
-from decimal import Decimal, InvalidOperation
 from typing import Any
 
-import boto3
 from botocore.exceptions import ClientError
 
 from finsense_shared import (
-    aggregate_predictions,
     confidence_from_probabilities,
     curated_key,
     dt_from_key,
     is_low_confidence,
     prediction_key,
+    recent_headlines,
 )
-from finsense_shared.s3io import read_jsonl, write_jsonl
-from finsense_shared.sagemaker import invoke_predict
+from finsense_shared.aws.s3 import read_jsonl, write_jsonl
+from finsense_shared.aws.sagemaker import invoke_predict
+from finsense_shared.aws.sqs import iter_records, send_json
+from finsense_shared.pipeline import TASK_PREDICT, build_cache_write_task, build_label_task, validate_task
+from finsense_shared.sentiment import aggregate_predictions
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 ENDPOINT_NAME = os.environ["SAGEMAKER_ENDPOINT_NAME"]
 DATA_BUCKET = os.environ["DATA_BUCKET"]
-PSEUDO_LABEL_FUNCTION_NAME = os.environ.get("PSEUDO_LABEL_FUNCTION_NAME", "").strip()
-CACHE_TABLE_NAME = os.environ.get("CACHE_TABLE_NAME", "").strip()
+LABEL_QUEUE_URL = os.environ.get("LABEL_QUEUE_URL", "").strip()
+CACHE_WRITE_QUEUE_URL = os.environ.get("CACHE_WRITE_QUEUE_URL", "").strip()
 CACHE_TTL_SECONDS = int(os.environ.get("CACHE_TTL_SECONDS", "604800"))
 RECENT_HEADLINES_MAX = int(os.environ.get("RECENT_HEADLINES_MAX", "10"))
 LOW_CONF_TOP_PROB = float(os.environ.get("LOW_CONF_TOP_PROB", "0.65"))
 LOW_CONF_MARGIN = float(os.environ.get("LOW_CONF_MARGIN", "0.0"))
 BATCH_SIZE = int(os.environ.get("SAGEMAKER_BATCH_SIZE", "32"))
 
-_lambda = boto3.client("lambda")
-_ddb = boto3.resource("dynamodb") if CACHE_TABLE_NAME else None
 
-
-def _to_ddb_number(value: Any, default: str = "0") -> Decimal:
-    try:
-        d = Decimal(str(value))
-        if d.is_nan() or d.is_infinite():
-            return Decimal(default)
-        return d
-    except (InvalidOperation, TypeError, ValueError):
-        return Decimal(default)
-
-
-def _write_cache_row(symbol: str, score: float, label: str, analyzed: int, headlines: list[dict[str, str]]) -> None:
-    """Mirror per-symbol results into DynamoDB so the existing cache_read API keeps working."""
-    if not CACHE_TABLE_NAME or _ddb is None:
+def _enqueue_cache_write(symbol: str, score: float, label: str, analyzed: int, headlines: list[dict[str, str]]) -> None:
+    """Best-effort: a lost cache refresh only delays the UI until the next run."""
+    if not CACHE_WRITE_QUEUE_URL:
         return
     try:
-        table = _ddb.Table(CACHE_TABLE_NAME)
-        now = int(time.time())
-        table.put_item(
-            Item={
-                "symbol": symbol,
-                "score": _to_ddb_number(score),
-                "label": label,
-                "article_count": int(analyzed),
-                "recent_headlines": headlines,
-                "updated_at": now,
-                "expires_at": now + CACHE_TTL_SECONDS,
-            }
+        send_json(
+            CACHE_WRITE_QUEUE_URL,
+            build_cache_write_task(
+                symbol,
+                score=score,
+                label=label,
+                article_count=analyzed,
+                recent_headlines=headlines,
+                updated_at=int(time.time()),
+                ttl_seconds=CACHE_TTL_SECONDS,
+                source="pipeline",
+            ),
         )
     except ClientError as e:
-        logger.exception("ddb_put_failed %s: %s", symbol, e)
-
-
-def _dispatch_pseudo_label(payload: dict[str, Any]) -> bool:
-    """Fire-and-forget async invoke of the pseudo-label Lambda."""
-    if not PSEUDO_LABEL_FUNCTION_NAME:
-        return False
-    try:
-        _lambda.invoke(
-            FunctionName=PSEUDO_LABEL_FUNCTION_NAME,
-            InvocationType="Event",
-            Payload=json.dumps(payload).encode("utf-8"),
-        )
-        return True
-    except ClientError as e:
-        logger.exception("pseudo_label_dispatch_failed symbol=%s: %s", payload.get("symbol"), e)
-        return False
+        logger.exception("cache_write_enqueue_failed %s: %s", symbol, e)
 
 
 def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
@@ -136,7 +96,7 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
 
     pred_records: list[dict[str, Any]] = []
     curated_hi: list[dict[str, Any]] = []
-    low_conf_rows: list[dict[str, Any]] = []
+    low_conf_indices: list[int] = []
     now = int(time.time())
 
     for i, (raw_row, rec) in enumerate(zip(rows, records)):
@@ -167,17 +127,7 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
             min_top_prob=LOW_CONF_TOP_PROB,
             min_margin=LOW_CONF_MARGIN,
         ):
-            low_conf_rows.append({
-                "row_index": i,
-                "text": raw_row.get("text"),
-                "title": raw_row.get("title"),
-                "url": raw_row.get("url"),
-                "source_type": raw_row.get("source_type"),
-                "model_label_id": rec.get("label_id"),
-                "model_label_name": rec.get("label_name"),
-                "probabilities": probs,
-                "confidence": confidence,
-            })
+            low_conf_indices.append(i)
         else:
             curated_hi.append({
                 "run_id": run_id,
@@ -198,34 +148,34 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
     if curated_hi:
         write_jsonl(bucket, curated_key_hi, curated_hi)
 
-    # Aggregate + cache row for the UI
     agg_score, agg_label, analyzed = aggregate_predictions(
         [r for r in pred_records if r.get("probabilities") and not r.get("error")]
     )
-    headlines = [
-        {"title": r.get("title") or "", "url": r.get("url") or ""}
-        for r in pred_records[:RECENT_HEADLINES_MAX]
-    ]
-    _write_cache_row(symbol, agg_score, agg_label, analyzed, headlines)
+    headlines = recent_headlines(pred_records, RECENT_HEADLINES_MAX)
+    _enqueue_cache_write(symbol, agg_score, agg_label, analyzed, headlines)
 
     dispatched = False
-    if low_conf_rows:
-        dispatched = _dispatch_pseudo_label({
-            "run_id": run_id,
-            "symbol": symbol,
-            "bucket": bucket,
-            "dt": when.isoformat() if when else None,
-            "predictions_key": pred_key,
-            "rows": low_conf_rows,
-        })
+    if low_conf_indices and LABEL_QUEUE_URL:
+        send_json(
+            LABEL_QUEUE_URL,
+            build_label_task(
+                run_id,
+                symbol,
+                bucket=bucket,
+                dt=when.isoformat() if when else None,
+                predictions_key=pred_key,
+                row_indices=low_conf_indices,
+            ),
+        )
+        dispatched = True
 
     return {
         "symbol": symbol,
         "run_id": run_id,
         "predictions": len(pred_records),
         "high_confidence": len(curated_hi),
-        "low_confidence": len(low_conf_rows),
-        "pseudo_dispatched": dispatched,
+        "low_confidence": len(low_conf_indices),
+        "label_dispatched": dispatched,
         "score": round(agg_score, 6),
         "label": agg_label,
         "analyzed": analyzed,
@@ -235,7 +185,13 @@ def _predict_for_payload(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
-    """Handle direct invoke from ingestion (single symbol) or batch of events (for manual replay)."""
-    if isinstance(event, dict) and "records" in event and isinstance(event["records"], list):
-        return {"results": [_predict_for_payload(p) for p in event["records"] if isinstance(p, dict)]}
+    """SQS consumer (batch size 1); also accepts a direct-invoke payload for manual replay."""
+    if isinstance(event, dict) and "Records" in event:
+        results = []
+        for message_id, body in iter_records(event):
+            if body is None:
+                logger.error("invalid_message_body message_id=%s", message_id)
+                continue
+            results.append(_predict_for_payload(validate_task(body, TASK_PREDICT)))
+        return {"results": results}
     return _predict_for_payload(event if isinstance(event, dict) else {})

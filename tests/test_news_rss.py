@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from finsense_shared import sources as sources_pkg
-from finsense_shared import ticker_names
 from finsense_shared.sources import news_rss
+from finsense_shared.tickers import names as ticker_names
 
 
 @pytest.fixture(autouse=True)

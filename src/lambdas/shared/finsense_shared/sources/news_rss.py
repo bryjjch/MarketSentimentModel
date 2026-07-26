@@ -9,8 +9,8 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from ..ticker_names import get_company_name
-from ..valid_tickers import load_valid_ticker_set
+from ..tickers.names import get_company_name
+from ..tickers.universe import load_valid_ticker_set
 from .base import CollectedItem
 
 logger = logging.getLogger(__name__)

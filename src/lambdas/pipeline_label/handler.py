@@ -1,25 +1,28 @@
-"""Pseudo-label Lambda: relabel low-confidence prediction rows with a provider-agnostic LLM.
+"""Label Lambda: relabel low-confidence prediction rows with a provider-agnostic LLM.
 
-Invocation payload (from the prediction Lambda)::
+Consumes label tasks from SQS (batch size 1). The canonical payload is the pointer
+form emitted by the predict Lambda::
 
     {
+      "task": "label",
       "run_id": "...",
       "symbol": "AAPL",
       "bucket": "finsense-data-...",
+      "dt": "2026-07-25",
       "predictions_key": "predictions/dt=.../symbol=AAPL/<run_id>.jsonl",
-      "rows": [
-        {"row_index": 3, "text": "...", "model_label_id": 1, "probabilities": {...}, "confidence": {...}},
-        ...
-      ]
+      "row_indices": [1, 3]
     }
+
+The referenced rows are re-read from the predictions object by ``row_index`` so the
+message stays tiny regardless of text size. A direct invoke with inline ``rows``
+(the pre-SQS payload shape) is still accepted for manual replays.
 
 Outputs:
   * ``pseudo/dt=.../symbol=.../<run_id>.jsonl`` — one LLM-labeled row per low-confidence
     input (includes both model + LLM labels so downstream code can compare/tune).
-  * Appends the same rows (with the LLM label as ground-truth) to
-    ``curated/dt=.../symbol=.../<run_id>.jsonl`` by writing a sibling curated object
-    suffixed with ``-pseudo`` (so we don't overwrite the high-confidence object already
-    emitted by the prediction Lambda).
+  * ``curated/dt=.../symbol=.../<run_id>-pseudo.jsonl`` — the successfully labeled rows
+    with the LLM label as ground truth (sibling of the high-confidence curated object,
+    which the predict Lambda already wrote).
 
 The provider is resolved from the ``LLM_PROVIDER`` env var (``openai``, ``google``,
 ``echo``) and the model from ``LLM_MODEL``. API keys come from ``OPENAI_API_KEY`` /
@@ -36,8 +39,10 @@ from datetime import date
 from typing import Any
 
 from finsense_shared import curated_key, dt_from_key, pseudo_label_key
+from finsense_shared.aws.s3 import read_jsonl, write_jsonl
+from finsense_shared.aws.sqs import iter_records
 from finsense_shared.llm_label import pseudo_label_text
-from finsense_shared.s3io import write_jsonl
+from finsense_shared.pipeline import TASK_LABEL, validate_task
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -91,16 +96,49 @@ def _label_row(row: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
+def _rows_from_pointer(bucket: str, predictions_key: str, row_indices: list[Any]) -> list[dict[str, Any]]:
+    """Select the low-confidence rows out of the predictions object by ``row_index``."""
+    want = {int(i) for i in row_indices}
+    out: list[dict[str, Any]] = []
+    for rec in read_jsonl(bucket, predictions_key):
+        try:
+            idx = int(rec.get("row_index", -1))
+        except (TypeError, ValueError):
+            continue
+        if idx not in want:
+            continue
+        out.append({
+            "row_index": idx,
+            "text": rec.get("text"),
+            "title": rec.get("title"),
+            "url": rec.get("url"),
+            "source_type": rec.get("source_type"),
+            "model_label_id": rec.get("label_id"),
+            "model_label_name": rec.get("label_name"),
+            "probabilities": rec.get("probabilities"),
+            "confidence": rec.get("confidence"),
+        })
+    return out
+
+
+def _label_payload(event: dict[str, Any]) -> dict[str, Any]:
     """Label the low-confidence rows and write pseudo/ + curated/ partitions."""
     bucket = event.get("bucket") or DATA_BUCKET
     symbol = str(event.get("symbol") or "").upper()
     run_id = str(event.get("run_id") or "")
-    rows = event.get("rows") or []
 
     if not symbol or not run_id:
         return {"error": "missing_payload_fields"}
+
+    rows = event.get("rows")
     if not isinstance(rows, list) or not rows:
+        row_indices = event.get("row_indices")
+        predictions_key = str(event.get("predictions_key") or "")
+        if isinstance(row_indices, list) and row_indices and predictions_key:
+            rows = _rows_from_pointer(bucket, predictions_key, row_indices)
+        else:
+            rows = []
+    if not rows:
         return {"symbol": symbol, "run_id": run_id, "labeled": 0, "detail": "no_rows"}
 
     # Derive the partition date so pseudo/ and curated/ land under the same dt=
@@ -166,3 +204,16 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     }
     logger.info("pseudo_label_complete %s", summary)
     return summary
+
+
+def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
+    """SQS consumer (batch size 1); also accepts a direct-invoke payload for manual replay."""
+    if isinstance(event, dict) and "Records" in event:
+        results = []
+        for message_id, body in iter_records(event):
+            if body is None:
+                logger.error("invalid_message_body message_id=%s", message_id)
+                continue
+            results.append(_label_payload(validate_task(body, TASK_LABEL)))
+        return {"results": results}
+    return _label_payload(event if isinstance(event, dict) else {})

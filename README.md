@@ -32,15 +32,16 @@ Two access patterns co-exist on the same HTTP API:
 - **`POST /sentiment/by-symbol`** — collects live news, calls the SageMaker endpoint, and returns a fresh score. Suited for interactive queries.
 - **`GET /sentiment/cache/{symbol}`** — reads a pre-computed DynamoDB row with a 7-day TTL. Suited for the UI heatmap, which reads the same symbols repeatedly.
 
-The daily ingestion pipeline writes the DynamoDB cache as a side-effect of running predictions, so no separate cache-refresh Lambda is needed.
+Both paths feed the same DynamoDB table through one `cache_write` Lambda: the daily pipeline and the on-demand API each enqueue a cache-write task on SQS, and `cache_write` is the only function with write access to the table.
 
 ### Daily data flywheel with confidence-gated pseudo-labeling
 
-An EventBridge-triggered Lambda chain runs once per day:
+An EventBridge-triggered chain of single-purpose Lambdas, connected by SQS queues (each with a dead-letter queue), runs once per day:
 
-1. **Ingestion** — collects news and social text per ticker, writes `raw/` to S3.
-2. **Prediction** — scores each text, writes `predictions/`. High-confidence rows go directly to `curated/` as training data.
-3. **Pseudo-labeling** — low-confidence rows (top-class probability < 0.65 by default) are routed to an LLM (OpenAI or Gemini, provider-agnostic). The LLM label is written to `pseudo/` and merged into `curated/`.
+1. **Dispatch** (`pipeline_dispatch`) — enumerates tickers, mints a shared `run_id`, and enqueues one collect task per symbol.
+2. **Collect** (`pipeline_collect`) — collects news and social text for one ticker, writes `raw/` to S3.
+3. **Predict** (`pipeline_predict`) — scores each text, writes `predictions/`. High-confidence rows go directly to `curated/` as training data; the aggregated score is enqueued for `cache_write`.
+4. **Label** (`pipeline_label`) — low-confidence rows (top-class probability < 0.65 by default) are routed to an LLM (OpenAI or Gemini, provider-agnostic). The LLM label is written to `pseudo/` and merged into `curated/`.
 
 This loop continuously expands the labeled training corpus without manual annotation.
 
