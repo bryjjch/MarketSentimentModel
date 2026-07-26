@@ -6,8 +6,9 @@ Two related lookups, both resolved from SSM with env/file fallbacks:
 * :func:`load_valid_tickers` — everything the API accepts and autocompletes. Cached
   in-process behind a TTL because ``api_ticker_suggest`` hits it on every keystroke.
 
-The bundled ``data/valid_tickers_us.json`` is not read unless ``VALID_TICKERS_FILE``
-points at it; a bare filename in that variable resolves against ``data/``.
+``load_valid_tickers`` falls back to the bundled ``data/valid_tickers_us.json`` when
+nothing else is configured, so the API never narrows to the tiny built-in default list.
+A bare filename in ``VALID_TICKERS_FILE`` also resolves against ``data/``.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 
 _DEFAULT_TICKERS: tuple[str, ...] = ("AAPL", "MSFT", "GOOGL")
 _DEFAULT_CACHE_TTL_SECONDS = 900
+_PACKAGED_TICKERS_FILE = "valid_tickers_us.json"
 _DEFAULT_PREFIX_LIMIT = 10
 _MAX_PREFIX_LIMIT = 100
 
@@ -182,6 +184,8 @@ def load_valid_tickers(
         symbols = _parse_serialized_symbols(os.environ.get("VALID_TICKERS_JSON"))
     if not symbols:
         symbols = _read_file_symbols(os.environ.get("VALID_TICKERS_FILE"))
+    if not symbols:
+        symbols = _read_file_symbols(_PACKAGED_TICKERS_FILE)
     if not symbols:
         symbols = _symbols(load_tickers())
 
