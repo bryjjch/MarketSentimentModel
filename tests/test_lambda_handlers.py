@@ -164,7 +164,7 @@ def _reload_handler(env: dict[str, str], handler_dir: str) -> Any:
     for key in ("handler",):
         sys.modules.pop(key, None)
     path = str(ROOT / "src" / "lambdas" / handler_dir)
-    shared = str(ROOT / "src" / "lambdas" / "shared")
+    shared = str(ROOT / "src" / "lambdas")
     for p in (path, shared):
         if p not in sys.path:
             sys.path.insert(0, p)
