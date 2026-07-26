@@ -7,12 +7,14 @@ FinSense is a financial sentiment analysis stack built around a fine-tuned FinBE
 | Path | Purpose |
 |------|---------|
 | `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, inference, metrics, run manifests |
-| `terraform/` | AWS resources (buckets, SageMaker endpoint, API Gateway, Lambdas, DynamoDB, EventBridge, pipeline) |
+| `terraform/` | AWS resources (buckets, IAM, API Gateway, Lambdas, SQS, DynamoDB, EventBridge, ECR, CI OIDC roles) |
+| `.github/workflows/` | `deploy.yml` (plan on PR, apply on merge) and `train.yml` (manual training / promotion) |
 | `src/sagemaker/` | SageMaker serving handler and training pipeline (build script, processing scripts, training entry points) |
 | `src/lambdas/` | Lambda handlers and shared `finsense_shared` code layer |
+| `scripts/` | Local build helpers and the one-time `migrate-state-to-ci.sh` |
 | `frontend/` | React + TypeScript + Vite UI for cache list / heatmap |
 | `notebooks/` | Exploratory / demonstration notebooks |
-| `data/` | Default download location for Financial PhraseBank (created on first use) |
+| `data/` | Local download location for Financial PhraseBank, used by the notebooks (created on first use). Cloud training reads the copy in S3 instead |
 | `tests/` | Pytest suite |
 
 ## Architecture decisions
@@ -44,6 +46,33 @@ An EventBridge-triggered chain of single-purpose Lambdas, connected by SQS queue
 4. **Label** (`pipeline_label`) — low-confidence rows (top-class probability < 0.65 by default) are routed to an LLM (OpenAI or Gemini, provider-agnostic). The LLM label is written to `pseudo/` and merged into `curated/`.
 
 This loop continuously expands the labeled training corpus without manual annotation.
+
+### Deployment is a push, not a checklist
+
+Pushing to `main` runs `.github/workflows/deploy.yml`, which builds and pushes the nine Lambda images, applies Terraform, and upserts the SageMaker Pipeline. Pull requests get a `terraform plan` posted as a comment. CI authenticates with GitHub OIDC (`terraform/github_oidc.tf`) — there are no AWS keys anywhere.
+
+Three things deliberately stay outside Terraform:
+
+- **The training pipeline.** Compiling its definition uploads `sourcedir.tar.gz` to S3 and embeds the role ARN Terraform creates, so it can only be built *after* an apply. CI runs `build_pipeline.py --upsert` as a post-apply step.
+- **The SageMaker model, endpoint config and endpoint.** These are created by the `model_promote` Lambda. Describing them in Terraform would mean every deploy needed the 405 MB `model.tar.gz` on disk, and every retrain would surface as drift.
+- **The Financial PhraseBank corpus.** It is seeded once into `s3://<data bucket>/reference/phrasebank/` and read from there by the pipeline's `PhraseBankS3Prefix` input. A Terraform-managed upload would call `filemd5()` on a local copy during *every* plan, which no CI runner has.
+
+Seeding it is a one-off, from any machine that has the corpus:
+
+```bash
+aws s3 cp data/FinancialPhraseBank-v1.0/FinancialPhraseBank-v1.0/Sentences_75Agree.txt \
+  "s3://$(terraform -chdir=terraform output -raw data_bucket_name)/reference/phrasebank/"
+```
+
+Lambda images are tagged with the git tree hash of `src/lambdas` rather than the commit SHA, so a Terraform-only commit reuses the existing tag and rebuilds nothing.
+
+### Retraining is gated on approval, not on a deploy
+
+The training pipeline runs in the cloud — on a schedule (`retrain_schedule`, disabled by default) or via the `train` workflow. Nothing trains locally.
+
+A run that clears the macro-F1 threshold registers a model package as **`PendingManualApproval`**. Approving it — in the SageMaker console, or `aws sagemaker update-model-package --model-approval-status Approved` — emits an EventBridge event that invokes `model_promote`, which mints a new model and endpoint config and updates the endpoint in place. A run that misses the threshold registers nothing.
+
+Rollback is the same mechanism in reverse: re-approve an older package, or invoke `model_promote` with its ARN. The last `model_versions_to_keep` (default 3) generations are retained for exactly this.
 
 ### Hive-partitioned S3 layout
 

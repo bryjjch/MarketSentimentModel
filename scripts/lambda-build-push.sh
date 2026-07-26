@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Build and push all Lambda container images to ECR.
 # Usage: ./scripts/lambda-build-push.sh [function_name ...]
-# If no function names are given, builds all eight.
+# If no function names are given, builds all nine.
 # Requires: docker, aws CLI, terraform output available in terraform/.
+#
+# CI does this too (.github/workflows/deploy.yml). This script stays for local
+# iteration; both derive the same tag from scripts/image-tag.sh, so an image built
+# here and an image built by CI from the same commit are interchangeable.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,36 +18,14 @@ REGION=$(aws configure get region 2>/dev/null || echo "${AWS_DEFAULT_REGION:-us-
 PROJECT=$(cd "$TERRAFORM_DIR" && terraform output -raw project_name 2>/dev/null || echo "finsense")
 
 REPO_BASE="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
-IMAGE_TAG="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
-TFVARS_FILE="$REPO_ROOT/terraform/image_tag.auto.tfvars"
+IMAGE_TAG="$("$REPO_ROOT/scripts/image-tag.sh")"
+TFVARS_FILE="$TERRAFORM_DIR/image_tag.auto.tfvars"
 
-# Docker COPY is byte-for-byte, so a source file Python cannot parse (e.g. text saved
-# as cp1252 instead of UTF-8) builds and pushes cleanly, then fails at Lambda import
-# time with Runtime.UserCodeSyntaxError. Catch it here instead.
 echo "Checking Lambda sources compile..."
-python3 - "$LAMBDAS_DIR" <<'PY'
-import pathlib
-import sys
+python3 "$REPO_ROOT/scripts/check_lambda_sources.py" "$LAMBDAS_DIR"
 
-root = pathlib.Path(sys.argv[1])
-bad = []
-for path in sorted(root.rglob("*.py")):
-    if "__pycache__" in path.parts:
-        continue
-    try:
-        compile(path.read_bytes(), str(path), "exec")
-    except (SyntaxError, UnicodeDecodeError) as exc:
-        bad.append(f"{path}: {exc}")
-
-if bad:
-    print("ERROR: Lambda sources failed to compile; refusing to build:", file=sys.stderr)
-    for line in bad:
-        print(f"  {line}", file=sys.stderr)
-    sys.exit(1)
-PY
-
-# The image is tagged with HEAD's SHA, so uncommitted edits produce an image whose tag
-# does not describe its contents.
+# The tag is the committed tree's hash, so uncommitted edits produce an image whose
+# tag describes different contents than what was built.
 if ! git -C "$REPO_ROOT" diff --quiet HEAD -- "$LAMBDAS_DIR"; then
   echo "WARNING: uncommitted changes under src/lambdas; image tag will not match its contents." >&2
 fi
@@ -53,18 +35,27 @@ aws ecr get-login-password --region "$REGION" | \
   docker login --username AWS --password-stdin "$REPO_BASE"
 
 # Map function directory name to ECR repo suffix (dir uses underscores, repo uses hyphens)
-ALL_FUNCS=(api_cache_read api_sentiment api_ticker_suggest cache_write pipeline_collect pipeline_dispatch pipeline_label pipeline_predict)
+ALL_FUNCS=(api_cache_read api_sentiment api_ticker_suggest cache_write model_promote pipeline_collect pipeline_dispatch pipeline_label pipeline_predict)
 FUNCS=("${@:-${ALL_FUNCS[@]}}")
 
 for func in "${FUNCS[@]}"; do
   repo_name="${PROJECT}-${func//_/-}"
   image="${REPO_BASE}/${repo_name}:${IMAGE_TAG}"
   echo ""
+
+  # ECR repos are IMMUTABLE, so re-pushing an existing tag is a hard error. The tag
+  # only changes when src/lambdas changes, so an existing tag means this exact source
+  # is already published.
+  if aws ecr describe-images --region "$REGION" --repository-name "$repo_name" \
+       --image-ids "imageTag=${IMAGE_TAG}" >/dev/null 2>&1; then
+    echo "==> Skipping $func: ${repo_name}:${IMAGE_TAG} already in ECR"
+    continue
+  fi
+
   echo "==> Building $func → $image"
   docker build \
     --platform linux/amd64 \
     --provenance=false \
-    --no-cache \
     -f "$LAMBDAS_DIR/$func/Dockerfile" \
     -t "$image" \
     "$LAMBDAS_DIR"

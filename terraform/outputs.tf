@@ -1,20 +1,25 @@
-output "s3_bucket_name" {
-  description = "Bucket storing model.tar.gz"
-  value       = aws_s3_bucket.models.bucket
+output "project_name" {
+  description = "Resource name prefix. Read by scripts/lambda-build-push.sh to derive ECR repository names."
+  value       = var.project_name
 }
 
-output "s3_model_key" {
-  description = "S3 object key for the uploaded model artifact"
-  value       = aws_s3_object.model_artifact.key
+output "aws_region" {
+  description = "Region every resource is deployed into."
+  value       = var.aws_region
+}
+
+output "s3_bucket_name" {
+  description = "Bucket storing model artifacts."
+  value       = aws_s3_bucket.models.bucket
 }
 
 output "sagemaker_endpoint_name" {
   description = "Name passed to InvokeEndpoint / Lambda env SAGEMAKER_ENDPOINT_NAME"
-  value       = aws_sagemaker_endpoint.classifier.name
+  value       = local.endpoint_name
 }
 
 output "sagemaker_endpoint_arn" {
-  value = aws_sagemaker_endpoint.classifier.arn
+  value = local.endpoint_arn
 }
 
 output "http_api_invoke_url" {
@@ -73,12 +78,12 @@ output "pipeline_dispatch_rule_name" {
 }
 
 output "pipeline_name" {
-  description = "SageMaker Pipeline name for the training/evaluation/registration flow."
-  value       = aws_sagemaker_pipeline.training.pipeline_name
+  description = "SageMaker Pipeline name. The pipeline is upserted by CI, not Terraform; this is the name CI upserts under."
+  value       = local.pipeline_name
 }
 
 output "pipeline_role_arn" {
-  description = "IAM role ARN used by the SageMaker Pipeline."
+  description = "IAM role ARN used by the SageMaker Pipeline. Passed to build_pipeline.py --role."
   value       = aws_iam_role.sagemaker_pipeline.arn
 }
 

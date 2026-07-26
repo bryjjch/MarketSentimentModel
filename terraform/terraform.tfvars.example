@@ -1,44 +1,26 @@
-# Copy to terraform.tfvars and fill in. Do not commit terraform.tfvars if it contains secrets.
-
-aws_region = "us-east-1"
-
-# Hugging Face DLC for your region — must use a Transformers 5.x image to match
-# the training stack (pyproject.toml requires transformers>=5.0.0,<6).
-# Verify current tags at: https://huggingface.co/docs/sagemaker/dlcs/available
-# CPU example:
-# sagemaker_image_uri = "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:2.6.0-transformers4.51.3-cpu-py312-ubuntu22.04"
-
-sagemaker_image_uri     = "REPLACE_WITH_REGION_SPECIFIC_HF_INFERENCE_DLC_URI"
-model_tarball_path      = "../../model.tar.gz"
-sagemaker_serverless_memory_size_in_mb = 2048
-sagemaker_serverless_max_concurrency   = 10
-
-# Optional:
-# project_name   = "finsense"
-# bucket_name    = "my-globally-unique-models-bucket"
-# endpoint_name  = "finsense-endpoint"
-# cors_allow_origins = ["https://myapp.example.com"]
+# Local overrides only. CI does not read this file — it applies env/prod.tfvars plus
+# TF_VAR_* environment variables. Copy to terraform.tfvars for workstation applies:
 #
-# Throttling (HTTP API + Lambda; tune with SageMaker serverless max_concurrency):
-# apigateway_throttle_rate_limit  = 10
-# apigateway_throttle_burst_limit = 20
-# lambda_reserved_concurrent_executions = 5
+#   terraform apply -var-file=env/prod.tfvars
 #
-# Sentiment orchestration + DynamoDB cache (optional):
-# reddit_credentials_secret_arn = "arn:aws:secretsmanager:region:account:secret:name"
-# sentiment_cache_ttl_seconds     = 604800
-# top_tickers_json                = "[\"AAPL\",\"MSFT\",\"GOOGL\"]"
-#
-# Daily ingestion + pseudo-labeling pipeline (optional):
-# data_bucket_name              = "my-globally-unique-data-bucket"
-# data_retention_days           = 90
-# ingestion_schedule            = "cron(0 13 * * ? *)"
-# ingestion_max_articles        = 20
-# ingestion_include_social      = true
-# sagemaker_batch_size          = 32
-# low_conf_top_prob             = 0.65
-# low_conf_margin               = 0.0
-# llm_provider                  = "openai"   # openai | google | echo
-# llm_model                     = ""          # empty = provider default
-# openai_secret_arn             = "arn:aws:secretsmanager:region:account:secret:finsense/openai"
+# terraform.tfvars is loaded automatically on top of that, so it only needs the values
+# you want to differ from production. Do not commit it.
+
+# Secret ARNs are deliberately absent from env/prod.tfvars because they carry the
+# account ID. Set them here for local applies, and as GitHub Actions repository
+# variables (TF_VAR_*) for CI.
 # google_secret_arn             = "arn:aws:secretsmanager:region:account:secret:finsense/google"
+# openai_secret_arn             = "arn:aws:secretsmanager:region:account:secret:finsense/openai"
+# reddit_credentials_secret_arn = "arn:aws:secretsmanager:region:account:secret:finsense/reddit"
+
+# image_tag is written to image_tag.auto.tfvars (gitignored, auto-loaded) by
+# scripts/lambda-build-push.sh. CI passes -var image_tag=... instead.
+
+# Handy local overrides:
+# cors_allow_origins  = ["http://localhost:5173"]
+# s3_force_destroy    = true
+# ingestion_max_articles = 5
+
+# Note: the SageMaker model, endpoint configuration and endpoint are NOT Terraform
+# resources. The model_promote Lambda creates and rolls them forward when a model
+# package is approved — see the note at the top of sagemaker.tf.

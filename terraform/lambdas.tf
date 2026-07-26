@@ -230,7 +230,7 @@ resource "aws_iam_role_policy" "pipeline_predict_lambda" {
         Sid      = "InvokeSageMakerEndpoint"
         Effect   = "Allow"
         Action   = ["sagemaker:InvokeEndpoint"]
-        Resource = aws_sagemaker_endpoint.classifier.arn
+        Resource = local.endpoint_arn
       },
       {
         Sid      = "ConsumePredictTasks"
@@ -262,7 +262,7 @@ resource "aws_lambda_function" "pipeline_predict" {
 
   environment {
     variables = {
-      SAGEMAKER_ENDPOINT_NAME = aws_sagemaker_endpoint.classifier.name
+      SAGEMAKER_ENDPOINT_NAME = local.endpoint_name
       DATA_BUCKET             = aws_s3_bucket.data.bucket
       LABEL_QUEUE_URL         = aws_sqs_queue.label.url
       CACHE_WRITE_QUEUE_URL   = aws_sqs_queue.cache_write.url
@@ -278,7 +278,6 @@ resource "aws_lambda_function" "pipeline_predict" {
     aws_iam_role_policy_attachment.pipeline_predict_lambda_basic,
     aws_iam_role_policy.pipeline_predict_lambda,
     aws_s3_bucket.data,
-    aws_sagemaker_endpoint.classifier,
   ]
 }
 
@@ -493,7 +492,7 @@ resource "aws_iam_role_policy" "api_sentiment_lambda" {
           Sid      = "InvokeSageMakerEndpoint"
           Effect   = "Allow"
           Action   = ["sagemaker:InvokeEndpoint"]
-          Resource = aws_sagemaker_endpoint.classifier.arn
+          Resource = local.endpoint_arn
         },
         {
           Sid      = "SendCacheWriteTasks"
@@ -533,7 +532,7 @@ resource "aws_lambda_function" "api_sentiment" {
 
   environment {
     variables = {
-      SAGEMAKER_ENDPOINT_NAME         = aws_sagemaker_endpoint.classifier.name
+      SAGEMAKER_ENDPOINT_NAME         = local.endpoint_name
       REDDIT_SECRET_ARN               = var.reddit_credentials_secret_arn
       RECENT_HEADLINES_MAX            = "10"
       DEFAULT_MAX_ARTICLES            = "12"
@@ -550,7 +549,6 @@ resource "aws_lambda_function" "api_sentiment" {
   depends_on = [
     aws_iam_role_policy_attachment.api_sentiment_lambda_basic,
     aws_iam_role_policy.api_sentiment_lambda,
-    aws_sagemaker_endpoint.classifier,
   ]
 }
 
@@ -662,5 +660,128 @@ resource "aws_lambda_function" "api_ticker_suggest" {
 
   depends_on = [
     aws_iam_role_policy_attachment.api_ticker_suggest_lambda_basic,
+  ]
+}
+
+# ---------------------------------------------------------------------------
+# model_promote: repoints the endpoint when a model package is approved
+#
+# Owns the SageMaker model / endpoint config / endpoint that Terraform deliberately
+# does not manage (see the note at the top of sagemaker.tf).
+# ---------------------------------------------------------------------------
+
+resource "aws_iam_role" "model_promote_lambda" {
+  name               = "${var.project_name}-model-promote-lambda"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "model_promote_lambda_basic" {
+  role       = aws_iam_role.model_promote_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "model_promote_lambda" {
+  name = "${var.project_name}-model-promote-perms"
+  role = aws_iam_role.model_promote_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadModelPackages"
+        Effect = "Allow"
+        Action = [
+          "sagemaker:DescribeModelPackage",
+          "sagemaker:ListModelPackages",
+        ]
+        Resource = [
+          "arn:aws:sagemaker:${var.aws_region}:${data.aws_caller_identity.current.account_id}:model-package/${var.model_package_group_name}/*",
+          aws_sagemaker_model_package_group.sentiment.arn,
+        ]
+      },
+      {
+        Sid    = "ManageModels"
+        Effect = "Allow"
+        Action = [
+          "sagemaker:CreateModel",
+          "sagemaker:DescribeModel",
+          "sagemaker:DeleteModel",
+        ]
+        Resource = "arn:aws:sagemaker:${var.aws_region}:${data.aws_caller_identity.current.account_id}:model/${var.project_name}-model-v*"
+      },
+      {
+        Sid    = "ManageEndpointConfigs"
+        Effect = "Allow"
+        Action = [
+          "sagemaker:CreateEndpointConfig",
+          "sagemaker:DescribeEndpointConfig",
+          "sagemaker:DeleteEndpointConfig",
+        ]
+        Resource = "arn:aws:sagemaker:${var.aws_region}:${data.aws_caller_identity.current.account_id}:endpoint-config/${var.project_name}-ep-cfg-v*"
+      },
+      {
+        Sid    = "ManageEndpoint"
+        Effect = "Allow"
+        Action = [
+          "sagemaker:CreateEndpoint",
+          "sagemaker:UpdateEndpoint",
+          "sagemaker:DescribeEndpoint",
+        ]
+        Resource = local.endpoint_arn
+      },
+      {
+        # list_models / list_endpoint_configs are account-scoped calls; the handler
+        # filters by name prefix and the Delete* statements above are what actually
+        # bound what it can remove.
+        Sid    = "ListForPruning"
+        Effect = "Allow"
+        Action = [
+          "sagemaker:ListModels",
+          "sagemaker:ListEndpointConfigs",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid      = "PassExecutionRole"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = aws_iam_role.sagemaker_execution.arn
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = "sagemaker.amazonaws.com"
+          }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_lambda_function" "model_promote" {
+  function_name = "${var.project_name}-model-promote"
+  role          = aws_iam_role.model_promote_lambda.arn
+  package_type  = "Image"
+  image_uri     = "${aws_ecr_repository.model_promote.repository_url}:${var.image_tag}"
+
+  # CreateEndpoint/UpdateEndpoint return as soon as the update is accepted; the
+  # rollout itself happens asynchronously, so this needs no long timeout.
+  timeout     = 60
+  memory_size = 256
+
+  environment {
+    variables = {
+      PROJECT_NAME               = var.project_name
+      ENDPOINT_NAME              = local.endpoint_name
+      MODEL_PACKAGE_GROUP        = var.model_package_group_name
+      EXECUTION_ROLE_ARN         = aws_iam_role.sagemaker_execution.arn
+      SERVERLESS_MEMORY_MB       = tostring(var.sagemaker_serverless_memory_size_in_mb)
+      SERVERLESS_MAX_CONCURRENCY = tostring(var.sagemaker_serverless_max_concurrency)
+      KEEP_VERSIONS              = tostring(var.model_versions_to_keep)
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.model_promote_lambda_basic,
+    aws_iam_role_policy.model_promote_lambda,
+    aws_sagemaker_model_package_group.sentiment,
   ]
 }
