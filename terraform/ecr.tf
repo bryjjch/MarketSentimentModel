@@ -77,3 +77,13 @@ resource "aws_ecr_repository" "api_ticker_suggest" {
     scan_on_push = true
   }
 }
+
+resource "aws_ecr_repository" "model_promote" {
+  name                 = "${var.project_name}-model-promote"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}

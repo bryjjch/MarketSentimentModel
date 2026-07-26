@@ -184,18 +184,18 @@ def test_all_lambda_sources_compile() -> None:
     """Every Lambda source must be parseable by CPython as it is stored on disk.
 
     The container images COPY these files verbatim, so a non-UTF-8 file builds fine and
-    only surfaces in production as Runtime.UserCodeSyntaxError on import.
+    only surfaces in production as Runtime.UserCodeSyntaxError on import. Shares its
+    implementation with the pre-build guard in scripts/lambda-build-push.sh.
     """
-    sources = [
-        p for p in sorted((ROOT / "src" / "lambdas").rglob("*.py"))
-        if "__pycache__" not in p.parts
-    ]
-    assert sources, "no Lambda sources found"
-    for path in sources:
-        try:
-            compile(path.read_bytes(), str(path), "exec")
-        except (SyntaxError, UnicodeDecodeError) as exc:
-            pytest.fail(f"{path.relative_to(ROOT)} does not compile: {exc}")
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        from check_lambda_sources import check
+    finally:
+        sys.path.pop(0)
+
+    lambdas_dir = ROOT / "src" / "lambdas"
+    assert list(lambdas_dir.rglob("*.py")), "no Lambda sources found"
+    assert check(lambdas_dir) == []
 
 
 # ---------------------------------------------------------------------------

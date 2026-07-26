@@ -18,6 +18,9 @@ resource "aws_iam_role" "sagemaker_execution" {
 }
 
 data "aws_iam_policy_document" "sagemaker_s3_and_logs" {
+  # Both buckets: pipeline training jobs write model.tar.gz under the data bucket's
+  # pipeline prefix, and that is the artifact a promoted model package points at.
+  # Models-bucket-only access here fails the endpoint at model-download time.
   statement {
     sid = "ModelArtifactRead"
     actions = [
@@ -27,6 +30,8 @@ data "aws_iam_policy_document" "sagemaker_s3_and_logs" {
     resources = [
       aws_s3_bucket.models.arn,
       "${aws_s3_bucket.models.arn}/*",
+      aws_s3_bucket.data.arn,
+      "${aws_s3_bucket.data.arn}/*",
     ]
   }
 
@@ -179,46 +184,22 @@ resource "aws_iam_role_policy" "sagemaker_pipeline_inline" {
 
 # ---------------------------------------------------------------------------
 # SageMaker: inference model and endpoint
+#
+# The model, endpoint configuration and endpoint are NOT Terraform resources. They
+# are created and rolled forward by the model_promote Lambda (see lambdas.tf) each
+# time a model package is approved. Describing them here would mean:
+#   - every deploy needed the 405 MB model.tar.gz on the machine running apply, and
+#   - every retrain showed up as drift Terraform wanted to revert.
+#
+# Terraform still owns the endpoint's *name* (local.endpoint_name), its execution
+# role, and its serverless sizing, which reach the promoter as env vars.
+#
+# Migrating an existing deployment: drop them from state without touching AWS —
+#   terraform state rm aws_sagemaker_model.classifier \
+#                      aws_sagemaker_endpoint_configuration.classifier \
+#                      aws_sagemaker_endpoint.classifier \
+#                      aws_s3_object.model_artifact
 # ---------------------------------------------------------------------------
-
-resource "aws_sagemaker_model" "classifier" {
-  name               = "${var.project_name}-hf-classifier"
-  execution_role_arn = aws_iam_role.sagemaker_execution.arn
-
-  primary_container {
-    image          = var.sagemaker_image_uri
-    model_data_url = "s3://${aws_s3_bucket.models.bucket}/${aws_s3_object.model_artifact.key}"
-  }
-
-  depends_on = [
-    aws_s3_object.model_artifact,
-    aws_iam_role_policy.sagemaker_inline,
-  ]
-}
-
-resource "aws_sagemaker_endpoint_configuration" "classifier" {
-  name = "${var.project_name}-ep-cfg"
-
-  production_variants {
-    variant_name           = "primary"
-    model_name             = aws_sagemaker_model.classifier.name
-    initial_variant_weight = 1
-
-    serverless_config {
-      memory_size_in_mb = var.sagemaker_serverless_memory_size_in_mb
-      max_concurrency   = var.sagemaker_serverless_max_concurrency
-    }
-  }
-}
-
-resource "aws_sagemaker_endpoint" "classifier" {
-  name                 = local.endpoint_name
-  endpoint_config_name = aws_sagemaker_endpoint_configuration.classifier.name
-
-  depends_on = [
-    aws_sagemaker_endpoint_configuration.classifier,
-  ]
-}
 
 # ---------------------------------------------------------------------------
 # SageMaker: training pipeline
@@ -228,15 +209,11 @@ resource "aws_sagemaker_model_package_group" "sentiment" {
   model_package_group_name = var.model_package_group_name
 }
 
-resource "aws_sagemaker_pipeline" "training" {
-  pipeline_name         = local.pipeline_name
-  pipeline_display_name = "${var.project_name}-sentiment-training-pipeline"
-  role_arn              = aws_iam_role.sagemaker_pipeline.arn
-
-  pipeline_definition = var.pipeline_definition_json != "" ? var.pipeline_definition_json : file(var.pipeline_definition_path)
-
-  depends_on = [
-    aws_iam_role_policy.sagemaker_pipeline_inline,
-    aws_sagemaker_model_package_group.sentiment,
-  ]
-}
+# The Pipeline itself is deliberately NOT a Terraform resource.
+#
+# Its definition is produced by the SageMaker SDK (src/sagemaker/pipeline/build_pipeline.py),
+# which uploads sourcedir.tar.gz to S3 while compiling and bakes this role's ARN into
+# the JSON. Managing it here meant Terraform needed a generated file that could only be
+# generated after Terraform had run. CI breaks the cycle by applying Terraform first,
+# then running `build_pipeline.py --upsert` with the role ARN from an output.
+# See the sagemaker-pipeline job in .github/workflows/deploy.yml.

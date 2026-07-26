@@ -9,7 +9,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-PIPELINE_SCRIPTS = Path(__file__).resolve().parent.parent / "infra" / "sagemaker" / "pipeline" / "scripts"
+PIPELINE_DIR = Path(__file__).resolve().parent.parent / "src" / "sagemaker" / "pipeline"
+PIPELINE_SCRIPTS = PIPELINE_DIR / "scripts"
 
 
 # ---------------------------------------------------------------------------
@@ -215,28 +216,35 @@ class TestEvaluationJsonContract:
 # ---------------------------------------------------------------------------
 
 class TestPipelineDefinition:
-    """Verify the pipeline definition can be compiled to JSON without AWS credentials."""
+    """Verify the pipeline definition compiles to JSON without AWS credentials.
+
+    CI upserts this definition straight to SageMaker (see .github/workflows/deploy.yml),
+    so a definition that fails to compile must fail the build rather than skip.
+    """
 
     @pytest.fixture(autouse=True)
     def _skip_without_sagemaker(self):
-        try:
-            import sagemaker  # noqa: F401
-        except ImportError:
-            pytest.skip("sagemaker SDK not installed")
+        pytest.importorskip("sagemaker", reason="sagemaker SDK not installed")
 
-    def test_pipeline_definition_is_valid_json(self):
+    @pytest.fixture(scope="class")
+    def definition(self) -> dict:
+        """Compile the pipeline to its JSON definition.
+
+        ``.run()`` only returns step arguments under a real ``PipelineSession`` — a
+        mocked ``Session`` makes it try to launch the job and return None. So use a
+        genuine PipelineSession over a mocked boto3 session: no credentials, no calls.
+        """
         from unittest.mock import MagicMock
 
-        import sagemaker
+        from sagemaker.workflow.pipeline_context import PipelineSession
 
-        mock_session = MagicMock(spec=sagemaker.Session)
-        mock_session.default_bucket.return_value = "test-bucket"
-        mock_session.boto_region_name = "us-east-1"
-        mock_session.upload_data = MagicMock(return_value="s3://test-bucket/data")
-        mock_session._append_sagemaker_config_tags = MagicMock(return_value=[])
-        mock_session.sagemaker_config = {}
+        boto_session = MagicMock()
+        boto_session.region_name = "us-east-1"
+        session = PipelineSession(boto_session=boto_session, default_bucket="test-bucket")
+        # Suppress the sourcedir/script upload the SDK performs while compiling.
+        session.upload_data = MagicMock(return_value="s3://test-bucket/code")
 
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "infra" / "sagemaker" / "pipeline"))
+        sys.path.insert(0, str(PIPELINE_DIR))
         try:
             from pipeline_definition import build_pipeline
 
@@ -244,14 +252,28 @@ class TestPipelineDefinition:
                 role="arn:aws:iam::123456789012:role/TestRole",
                 pipeline_name="TestPipeline",
                 default_bucket="test-bucket",
-                sagemaker_session=mock_session,
+                sagemaker_session=session,
             )
-
-            definition_str = pipeline.definition()
-            definition = json.loads(definition_str)
-
-            assert "Steps" in definition or "steps" in definition.get("PipelineDefinitionBody", definition)
-        except Exception:
-            pytest.skip("Pipeline definition generation requires compatible sagemaker SDK version")
+            return json.loads(pipeline.definition())
         finally:
             sys.path.pop(0)
+
+    def test_top_level_steps(self, definition):
+        assert {step["Name"] for step in definition["Steps"]} == {
+            "DataPrep",
+            "MLMPreTraining",
+            "ClassifierTraining",
+            "EvaluateClassifier",
+            "CheckMacroF1",
+        }
+
+    def test_registration_is_gated_on_the_condition(self, definition):
+        condition = next(s for s in definition["Steps"] if s["Name"] == "CheckMacroF1")
+        assert [s["Type"] for s in condition["Arguments"]["IfSteps"]] == ["RegisterModel"]
+        assert condition["Arguments"]["ElseSteps"] == []
+
+    def test_registration_requires_manual_approval(self, definition):
+        """The promotion gate depends on this: model_promote fires on Approved."""
+        condition = next(s for s in definition["Steps"] if s["Name"] == "CheckMacroF1")
+        register = condition["Arguments"]["IfSteps"][0]
+        assert register["Arguments"]["ModelApprovalStatus"] == "PendingManualApproval"

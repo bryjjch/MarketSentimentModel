@@ -1,0 +1,273 @@
+name: deploy
+
+# Pull requests get a plan posted as a comment; merging to main builds images,
+# applies Terraform, and upserts the SageMaker Pipeline.
+#
+# One-time setup (see terraform/github_oidc.tf):
+#   terraform apply from a workstation once to create the OIDC provider and roles, then
+#   set these GitHub Actions *repository variables*:
+#     AWS_REGION            e.g. us-east-1
+#     AWS_PLAN_ROLE_ARN     terraform output github_plan_role_arn
+#     AWS_APPLY_ROLE_ARN    terraform output github_apply_role_arn
+#     TF_VAR_GOOGLE_SECRET_ARN                Secrets Manager ARN for the LLM key
+#     TF_VAR_OPENAI_SECRET_ARN                (optional)
+#     TF_VAR_REDDIT_CREDENTIALS_SECRET_ARN    (optional)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild_images:
+        description: "Rebuild and push Lambda images even if the tag already exists in ECR (use after a base-image update)."
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write # OIDC
+  contents: read
+  pull-requests: write # plan comment
+
+# Never let two runs apply at once; a queued run must wait, not be cancelled.
+concurrency:
+  group: finsense-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TERRAFORM_VERSION: "1.15.8"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,pipeline]" -r requirements/pinned-train.txt
+
+      - name: Check Lambda sources compile
+        run: python scripts/check_lambda_sources.py
+
+      - name: Run tests
+        run: pytest -q
+
+  # Compute the image tag once so every downstream job agrees on it.
+  tag:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.compute.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: compute
+        run: echo "image_tag=$(scripts/image-tag.sh)" >> "$GITHUB_OUTPUT"
+
+  images:
+    needs: [test, tag]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        function:
+          - api_cache_read
+          - api_sentiment
+          - api_ticker_suggest
+          - cache_write
+          - model_promote
+          - pipeline_collect
+          - pipeline_dispatch
+          - pipeline_label
+          - pipeline_predict
+    env:
+      IMAGE_TAG: ${{ needs.tag.outputs.image_tag }}
+      # Pull requests build to prove the Dockerfile still works, but never push:
+      # the plan role has no ECR write access.
+      PUSH: ${{ github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive ECR repository name
+        id: names
+        run: echo "repo=finsense-${function//_/-}" >> "$GITHUB_OUTPUT"
+        env:
+          function: ${{ matrix.function }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: env.PUSH == 'true'
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+        if: env.PUSH == 'true'
+
+      - name: Check whether this tag is already published
+        id: exists
+        if: env.PUSH == 'true' && !inputs.rebuild_images
+        run: |
+          # ECR repos are IMMUTABLE, so re-pushing an existing tag is a hard error.
+          # The tag only moves when src/lambdas changes, so an existing tag means
+          # this exact source is already in ECR.
+          if aws ecr describe-images \
+               --repository-name "${{ steps.names.outputs.repo }}" \
+               --image-ids "imageTag=${IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ steps.names.outputs.repo }}:${IMAGE_TAG} already published; skipping build."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.exists.outputs.skip != 'true'
+
+      - uses: docker/build-push-action@v6
+        if: steps.exists.outputs.skip != 'true'
+        with:
+          context: src/lambdas
+          file: src/lambdas/${{ matrix.function }}/Dockerfile
+          platforms: linux/amd64
+          # Lambda rejects OCI manifest lists, which is what buildx attaches
+          # provenance attestations via.
+          provenance: false
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.ecr.outputs.registry || 'local' }}/${{ steps.names.outputs.repo }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=${{ matrix.function }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.function }}
+
+  terraform:
+    needs: [tag, images]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      IMAGE_TAG: ${{ needs.tag.outputs.image_tag }}
+      TF_VAR_google_secret_arn: ${{ vars.TF_VAR_GOOGLE_SECRET_ARN }}
+      TF_VAR_openai_secret_arn: ${{ vars.TF_VAR_OPENAI_SECRET_ARN }}
+      TF_VAR_reddit_credentials_secret_arn: ${{ vars.TF_VAR_REDDIT_CREDENTIALS_SECRET_ARN }}
+    outputs:
+      applied: ${{ steps.apply.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require the LLM secret ARN
+        run: |
+          # An empty ARN silently deploys a pipeline_label Lambda that cannot label.
+          if [ -z "${TF_VAR_google_secret_arn}" ]; then
+            echo "::error::Repository variable TF_VAR_GOOGLE_SECRET_ARN is not set."
+            exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN || vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          # The wrapper rewrites stdout, which breaks capturing plan text.
+          terraform_wrapper: false
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init
+        # Concurrent PRs contend for the state lock; wait rather than fail outright.
+        run: terraform init -input=false -lock-timeout=5m -backend-config=backend.hcl
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Plan
+        id: plan
+        run: |
+          terraform plan -input=false -no-color -lock-timeout=5m \
+            -var-file=env/prod.tfvars \
+            -var "image_tag=${IMAGE_TAG}" \
+            -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Comment plan on the pull request
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const limit = 60000; // GitHub caps comment bodies at 65536 characters.
+            let plan = fs.readFileSync('terraform/plan.txt', 'utf8');
+            if (plan.length > limit) {
+              plan = plan.slice(-limit) + '\n\n...output truncated; see the job log for the full plan.';
+            }
+            const marker = '<!-- finsense-terraform-plan -->';
+            const body = `${marker}\n### Terraform plan\n\nimage_tag: \`${{ env.IMAGE_TAG }}\`\n\n<details><summary>Show plan</summary>\n\n\`\`\`terraform\n${plan}\n\`\`\`\n\n</details>`;
+
+            // Update the existing comment rather than stacking one per push.
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
+
+      - name: Apply
+        id: apply
+        if: github.event_name != 'pull_request'
+        run: terraform apply -input=false -auto-approve -lock-timeout=5m tfplan
+
+  # The pipeline definition is compiled by the SageMaker SDK, not Terraform: building it
+  # uploads sourcedir.tar.gz to S3 and embeds the role ARN Terraform creates. So it runs
+  # after apply, reading both from Terraform outputs. Upsert is idempotent.
+  sagemaker-pipeline:
+    needs: terraform
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - run: pip install -r requirements/pinned-pipeline.txt
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Init
+        working-directory: terraform
+        # Concurrent PRs contend for the state lock; wait rather than fail outright.
+        run: terraform init -input=false -lock-timeout=5m -backend-config=backend.hcl
+
+      - name: Upsert the training pipeline
+        env:
+          # The SDK owns the top-level `sagemaker` name, so the package must be
+          # importable as plain `pipeline`.
+          PYTHONPATH: src/sagemaker
+        run: |
+          python -m pipeline.build_pipeline \
+            --role "$(terraform -chdir=terraform output -raw pipeline_role_arn)" \
+            --pipeline-name "$(terraform -chdir=terraform output -raw pipeline_name)" \
+            --bucket "$(terraform -chdir=terraform output -raw data_bucket_name)" \
+            --region "${{ vars.AWS_REGION }}" \
+            --upsert

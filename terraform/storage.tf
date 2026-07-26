@@ -64,12 +64,9 @@ resource "aws_s3_bucket_policy" "models_tls" {
   depends_on = [aws_s3_bucket_public_access_block.models]
 }
 
-resource "aws_s3_object" "model_artifact" {
-  bucket = aws_s3_bucket.models.id
-  key    = "${var.model_key_prefix}/model.tar.gz"
-  source = abspath(var.model_tarball_path)
-  etag   = filemd5(abspath(var.model_tarball_path))
-}
+# The model artifact is no longer uploaded from a workstation. SageMaker training jobs
+# write it, the pipeline registers it as a model package, and model_promote points the
+# endpoint at the approved version. See the note at the top of sagemaker.tf.
 
 # ---------------------------------------------------------------------------
 # S3: pipeline data (raw / predictions / pseudo / curated)

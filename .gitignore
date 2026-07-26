@@ -38,13 +38,15 @@ coverage.xml
 .mypy_cache/
 
 # Terraform local build artifacts
+# backend.hcl and .terraform.lock.hcl are deliberately tracked: CI works from a fresh
+# clone, so `init -backend-config=backend.hcl` needs the file present, and an untracked
+# lock lets CI resolve a different provider version than the one planned locally.
 terraform/build/
 terraform/terraform.tfvars
-terraform/image_tag.auto.tfvars
-terraform/backend.hcl
 terraform/.terraform/
-terraform/pipeline_definition.json
-terraform/.terraform.lock.hcl
+
+# Written by scripts/lambda-build-push.sh for local applies; CI passes -var instead.
+terraform/image_tag.auto.tfvars
 
 # Terraform state and other local artifacts (never commit)
 *.tfstate

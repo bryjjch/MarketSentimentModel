@@ -7,17 +7,21 @@ PYTHONPATH must point at ``src/sagemaker`` (not ``src``): the installed SageMake
 SDK owns the top-level ``sagemaker`` name, so this package must be imported as
 plain ``pipeline``.
 
-Generate JSON for Terraform deployment (offline, no AWS calls):
+``--upsert`` is the deployment path, run by the sagemaker-pipeline job in
+.github/workflows/deploy.yml on every push to main. Terraform owns the role and
+the model package group but not the pipeline: compiling the definition uploads
+sourcedir.tar.gz to S3 and embeds the role ARN, so it can only happen after
+Terraform has applied.
 
     PYTHONPATH=src/sagemaker python -m pipeline.build_pipeline \\
-        --role arn:aws:iam::123456789012:role/SageMakerPipelineRole \\
-        --output terraform/pipeline_definition.json
-
-Upsert the pipeline directly to SageMaker:
-
-    PYTHONPATH=src/sagemaker python -m pipeline.build_pipeline \\
-        --role arn:aws:iam::123456789012:role/SageMakerPipelineRole \\
+        --role "$(terraform -chdir=terraform output -raw pipeline_role_arn)" \\
+        --pipeline-name "$(terraform -chdir=terraform output -raw pipeline_name)" \\
+        --bucket "$(terraform -chdir=terraform output -raw data_bucket_name)" \\
         --upsert
+
+``--output`` writes the compiled JSON to a file instead. Nothing consumes it; it is
+for inspecting or diffing a definition before upserting. Despite compiling "offline"
+it still needs credentials, because the SDK uploads code artifacts while compiling.
 """
 
 from __future__ import annotations
