@@ -1,8 +1,13 @@
-# Pin SageMaker Python SDK to v2.x for local pipeline JSON generation.
+# Pin SageMaker Python SDK to v2.x for building and upserting the training pipeline.
 # v3+ splits/removes the legacy `sagemaker.workflow.*` API used by
-# `infra/sagemaker/pipeline/build_pipeline.py` and `pipeline_definition.py`.
+# `src/sagemaker/pipeline/build_pipeline.py` and `pipeline_definition.py`.
 #
-# Install (from repo root, ideally Python 3.10–3.12):
+# This is the pipeline-submitting *client* environment, and it is deliberately
+# separate from pinned-train.txt. They cannot be installed together: sagemaker 2.x
+# requires either pandas>=2.3.0 or numpy<2, both of which contradict the training
+# pins. Nothing needs them together -- the training container never has the SDK.
+#
+# Install (from repo root, ideally Python 3.10-3.12):
 #   pip install -r requirements/pinned-pipeline.txt
 #
 # Or: pip install -e ".[pipeline]"

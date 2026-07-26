@@ -215,6 +215,51 @@ class TestEvaluationJsonContract:
 # Pipeline definition (offline JSON generation)
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(scope="module")
+def compiled_definition() -> dict:
+    """Compile the pipeline to its JSON definition.
+
+    Skips where the SageMaker SDK is absent. Probing ``sagemaker.workflow.pipeline_context``
+    rather than ``sagemaker`` is deliberate: pytest's ``pythonpath`` includes ``src``, and
+    ``src/sagemaker/`` is a namespace package that claims the top-level name whenever the
+    real SDK is not installed — so ``importorskip("sagemaker")`` silently succeeds and the
+    tests then die on the missing submodule. The training CI environment is exactly that
+    case; the test-pipeline job installs the SDK and runs these for real.
+
+    ``.run()`` only returns step arguments under a real ``PipelineSession`` — a mocked
+    ``Session`` makes it try to launch the job and return None. So use a genuine
+    PipelineSession over a mocked boto3 session: no credentials, no network calls.
+    """
+    pytest.importorskip(
+        "sagemaker.workflow.pipeline_context",
+        reason="SageMaker SDK v2 not installed; covered by the test-pipeline CI job",
+    )
+
+    from unittest.mock import MagicMock
+
+    from sagemaker.workflow.pipeline_context import PipelineSession
+
+    boto_session = MagicMock()
+    boto_session.region_name = "us-east-1"
+    session = PipelineSession(boto_session=boto_session, default_bucket="test-bucket")
+    # Suppress the sourcedir/script upload the SDK performs while compiling.
+    session.upload_data = MagicMock(return_value="s3://test-bucket/code")
+
+    sys.path.insert(0, str(PIPELINE_DIR))
+    try:
+        from pipeline_definition import build_pipeline
+
+        pipeline = build_pipeline(
+            role="arn:aws:iam::123456789012:role/TestRole",
+            pipeline_name="TestPipeline",
+            default_bucket="test-bucket",
+            sagemaker_session=session,
+        )
+        return json.loads(pipeline.definition())
+    finally:
+        sys.path.pop(0)
+
+
 class TestPipelineDefinition:
     """Verify the pipeline definition compiles to JSON without AWS credentials.
 
@@ -222,44 +267,8 @@ class TestPipelineDefinition:
     so a definition that fails to compile must fail the build rather than skip.
     """
 
-    @pytest.fixture(autouse=True)
-    def _skip_without_sagemaker(self):
-        pytest.importorskip("sagemaker", reason="sagemaker SDK not installed")
-
-    @pytest.fixture(scope="class")
-    def definition(self) -> dict:
-        """Compile the pipeline to its JSON definition.
-
-        ``.run()`` only returns step arguments under a real ``PipelineSession`` — a
-        mocked ``Session`` makes it try to launch the job and return None. So use a
-        genuine PipelineSession over a mocked boto3 session: no credentials, no calls.
-        """
-        from unittest.mock import MagicMock
-
-        from sagemaker.workflow.pipeline_context import PipelineSession
-
-        boto_session = MagicMock()
-        boto_session.region_name = "us-east-1"
-        session = PipelineSession(boto_session=boto_session, default_bucket="test-bucket")
-        # Suppress the sourcedir/script upload the SDK performs while compiling.
-        session.upload_data = MagicMock(return_value="s3://test-bucket/code")
-
-        sys.path.insert(0, str(PIPELINE_DIR))
-        try:
-            from pipeline_definition import build_pipeline
-
-            pipeline = build_pipeline(
-                role="arn:aws:iam::123456789012:role/TestRole",
-                pipeline_name="TestPipeline",
-                default_bucket="test-bucket",
-                sagemaker_session=session,
-            )
-            return json.loads(pipeline.definition())
-        finally:
-            sys.path.pop(0)
-
-    def test_top_level_steps(self, definition):
-        assert {step["Name"] for step in definition["Steps"]} == {
+    def test_top_level_steps(self, compiled_definition):
+        assert {step["Name"] for step in compiled_definition["Steps"]} == {
             "DataPrep",
             "MLMPreTraining",
             "ClassifierTraining",
@@ -267,13 +276,13 @@ class TestPipelineDefinition:
             "CheckMacroF1",
         }
 
-    def test_registration_is_gated_on_the_condition(self, definition):
-        condition = next(s for s in definition["Steps"] if s["Name"] == "CheckMacroF1")
+    def test_registration_is_gated_on_the_condition(self, compiled_definition):
+        condition = next(s for s in compiled_definition["Steps"] if s["Name"] == "CheckMacroF1")
         assert [s["Type"] for s in condition["Arguments"]["IfSteps"]] == ["RegisterModel"]
         assert condition["Arguments"]["ElseSteps"] == []
 
-    def test_registration_requires_manual_approval(self, definition):
+    def test_registration_requires_manual_approval(self, compiled_definition):
         """The promotion gate depends on this: model_promote fires on Approved."""
-        condition = next(s for s in definition["Steps"] if s["Name"] == "CheckMacroF1")
+        condition = next(s for s in compiled_definition["Steps"] if s["Name"] == "CheckMacroF1")
         register = condition["Arguments"]["IfSteps"][0]
         assert register["Arguments"]["ModelApprovalStatus"] == "PendingManualApproval"
