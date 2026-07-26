@@ -16,6 +16,7 @@ from .symbol import normalize_symbol
 from .tickers import load_tickers
 
 _DEFAULT_CACHE_TTL_SECONDS = 900
+_PACKAGED_TICKERS_FILE = "valid_tickers_us.json"
 _DEFAULT_PREFIX_LIMIT = 10
 _MAX_PREFIX_LIMIT = 100
 
@@ -126,6 +127,8 @@ def load_valid_tickers(
         symbols = _parse_serialized_symbols(os.environ.get("VALID_TICKERS_JSON"))
     if not symbols:
         symbols = _read_file_symbols(os.environ.get("VALID_TICKERS_FILE"))
+    if not symbols:
+        symbols = _read_file_symbols(_PACKAGED_TICKERS_FILE)
     if not symbols:
         symbols = _clean(load_tickers())
 
