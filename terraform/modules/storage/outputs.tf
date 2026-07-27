@@ -1,21 +1,21 @@
 output "models_bucket" {
   description = "Model artifact bucket name."
-  value       = module.models.bucket
+  value       = aws_s3_bucket.models.bucket
 }
 
 output "models_bucket_arn" {
   description = "Model artifact bucket ARN."
-  value       = module.models.arn
+  value       = aws_s3_bucket.models.arn
 }
 
 output "data_bucket" {
   description = "Pipeline data bucket name."
-  value       = module.data.bucket
+  value       = aws_s3_bucket.data.bucket
 }
 
 output "data_bucket_arn" {
   description = "Pipeline data bucket ARN."
-  value       = module.data.arn
+  value       = aws_s3_bucket.data.arn
 }
 
 output "sentiment_cache_table_name" {

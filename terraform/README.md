@@ -12,20 +12,20 @@ Terraform for the whole AWS stack. The root module here is what CI runs
 | `locals.tf` | Derived names, the constructed endpoint ARN, and the Lambda image list |
 | `variables.tf` | All root inputs, bannered by the module that consumes them |
 | `outputs.tf` | Read by name from `scripts/` and `.github/workflows/` — rename with care |
+| `moved.tf` | State migration for the s3-bucket inlining; see the note in the file |
 | `env/prod.tfvars` | Production values, applied by `.github/workflows/deploy.yml` |
 | `backend.hcl` | S3 backend config, passed to `terraform init -backend-config=` |
 
 ## Modules
 
-Two of these are shared primitives used by the others; the rest each own one slice of
-the stack.
+`lambda-function` is a shared primitive used by the others; the rest each own one slice
+of the stack.
 
 | Module | Kind | Owns |
 |--------|------|------|
 | `lambda-function` | primitive | A container-image Lambda plus its role, basic execution policy and inline policy |
-| `s3-bucket` | primitive | A private, encrypted, versioned bucket that rejects plaintext requests |
 | `ecr` | component | One immutable-tag repository per Lambda image |
-| `storage` | component | Model + data buckets, data lifecycle rules, sentiment cache table |
+| `storage` | component | Model + data buckets, data lifecycle rules, sentiment cache table (one file each) |
 | `queues` | component | The four stage-to-stage SQS queues and their DLQs |
 | `pipeline` | component | Daily cron -> dispatch -> collect -> predict -> label -> cache-write |
 | `api` | component | HTTP API, its three Lambdas, routes and invoke permissions |
