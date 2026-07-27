@@ -1,7 +1,7 @@
 # State migration for inlining the s3-bucket module into modules/storage.
 #
 # Both buckets used to be instances of a shared ../s3-bucket module; they are now
-# declared directly in models.tf and data.tf. Every resource kept its AWS identity —
+# declared directly in that module's main.tf. Every resource kept its AWS identity —
 # only its Terraform address changed — so these blocks rewrite state instead of
 # destroying and recreating two buckets that hold model artifacts and pipeline data.
 #
