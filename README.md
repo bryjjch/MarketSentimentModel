@@ -8,10 +8,10 @@ FinSense is a financial sentiment analysis stack built around a fine-tuned FinBE
 |------|---------|
 | `src/training/` | Training package: data helpers, pseudo-labeling, MLM, classifier, inference, metrics, run manifests |
 | `terraform/` | AWS resources, split into modules for storage, queues, the ingestion pipeline, the HTTP API, SageMaker and CI OIDC roles (see `terraform/README.md`) |
-| `.github/workflows/` | `deploy.yml` (plan on PR, apply on merge) and `train.yml` (manual training / promotion) |
+| `.github/workflows/` | `deploy.yml` (plan on PR, apply on merge) |
 | `src/sagemaker/` | SageMaker serving handler and training pipeline (build script, processing scripts, training entry points) |
 | `src/lambdas/` | Lambda handlers and shared `finsense_shared` code layer |
-| `scripts/` | Local build helpers and the one-time `migrate-state-to-ci.sh` |
+| `scripts/` | Local build helpers (`lambda-build-push.sh`, `image-tag.sh`, `check_lambda_sources.py`) |
 | `frontend/` | React + TypeScript + Vite UI for cache list / heatmap |
 | `notebooks/` | Exploratory / demonstration notebooks |
 | `data/` | Local download location for Financial PhraseBank, used by the notebooks (created on first use). Cloud training reads the copy in S3 instead |
@@ -90,11 +90,11 @@ Lambda images are tagged with the git tree hash of `src/lambdas` rather than the
 
 ### Retraining is gated on approval, not on a deploy
 
-The training pipeline runs in the cloud — on a schedule (`retrain_schedule`, disabled by default) or via the `train` workflow. Nothing trains locally.
+The training pipeline runs in the cloud — on a schedule (`retrain_schedule`, disabled by default) or started manually from the SageMaker console. Nothing trains locally.
 
 A run that clears the macro-F1 threshold registers a model package as **`PendingManualApproval`**. Approving it — in the SageMaker console, or `aws sagemaker update-model-package --model-approval-status Approved` — emits an EventBridge event that invokes `model_promote`, which mints a new model and endpoint config and updates the endpoint in place. A run that misses the threshold registers nothing.
 
-Rollback is the same mechanism in reverse: re-approve an older package, or invoke `model_promote` with its ARN. The last `model_versions_to_keep` (default 3) generations are retained for exactly this.
+Rollback is the same mechanism in reverse: re-approve an older package in the SageMaker console. The last `model_versions_to_keep` (default 3) generations are retained for exactly this.
 
 ### Hive-partitioned S3 layout
 
