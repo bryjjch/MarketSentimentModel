@@ -171,7 +171,7 @@ def default_model(provider: str) -> str:
     if provider == "openai":
         return "gpt-4o-mini"
     if provider == "google":
-        return "gemini-2.0-flash"
+        return "gemini-3.1-flash-lite"
     return "echo-stub"
 
 

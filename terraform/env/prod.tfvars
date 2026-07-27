@@ -30,7 +30,7 @@ low_conf_top_prob    = 0.65
 low_conf_margin      = 0.0
 
 llm_provider = "google"
-llm_model    = "gemini-3.1-flash-lite-preview"
+llm_model    = "gemini-3.1-flash-lite"
 
 # --- Retraining --------------------------------------------------------------
 # Disabled until a manually started run has been watched end to end. Flip to true
