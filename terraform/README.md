@@ -12,19 +12,18 @@ Terraform for the whole AWS stack. The root module here is what CI runs
 | `locals.tf` | Derived names, the constructed endpoint ARN, and the Lambda image list |
 | `variables.tf` | All root inputs, bannered by the module that consumes them |
 | `outputs.tf` | Read by name from `scripts/` and `.github/workflows/` — rename with care |
-| `moved.tf` | State migration for the modules refactor; see the note in the file |
+| `moved.tf` | State migration for the s3-bucket inlining; see the note in the file |
 | `env/prod.tfvars` | Production values, applied by `.github/workflows/deploy.yml` |
 | `backend.hcl` | S3 backend config, passed to `terraform init -backend-config=` |
 
 ## Modules
 
-Two of these are shared primitives used by the others; the rest each own one slice of
-the stack.
+`lambda-function` is a shared primitive used by the others; the rest each own one slice
+of the stack.
 
 | Module | Kind | Owns |
 |--------|------|------|
 | `lambda-function` | primitive | A container-image Lambda plus its role, basic execution policy and inline policy |
-| `s3-bucket` | primitive | A private, encrypted, versioned bucket that rejects plaintext requests |
 | `ecr` | component | One immutable-tag repository per Lambda image |
 | `storage` | component | Model + data buckets, data lifecycle rules, sentiment cache table |
 | `queues` | component | The four stage-to-stage SQS queues and their DLQs |
@@ -50,8 +49,8 @@ terraform plan  -var-file=env/prod.tfvars
 ## What Terraform deliberately does not manage
 
 - **The SageMaker model, endpoint config and endpoint.** The `model_promote` Lambda
-  creates and rolls them forward on each model-package approval. See
-  `modules/sagemaker/registry.tf`.
+  creates and rolls them forward on each model-package approval. See the model
+  registry note in `modules/sagemaker/main.tf`.
 - **The SageMaker Pipeline definition.** Generated and upserted by
   `src/sagemaker/pipeline/build_pipeline.py` in CI, after Terraform has run.
 - **The Financial PhraseBank corpus** in `s3://<data bucket>/reference/phrasebank/`,
