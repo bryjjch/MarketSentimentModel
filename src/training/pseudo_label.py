@@ -9,7 +9,7 @@ Requires an API key for the chosen provider unless using --provider echo (offlin
 
 Example:
   python -m training.pseudo_label --input data/raw_news.jsonl --output data/pseudo.jsonl --model gpt-4o-mini
-  python -m training.pseudo_label --provider google --model gemini-2.0-flash --input data/raw_news.jsonl --output data/pseudo.jsonl
+  python -m training.pseudo_label --provider google --model gemini-3.1-flash-lite --input data/raw_news.jsonl --output data/pseudo.jsonl
   finsense-pseudo-label --input data/raw_news.jsonl --output data/pseudo.jsonl
 """
 
@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--model",
         default=None,
-        help="Model id for the provider (default: gpt-4o-mini for openai, gemini-2.0-flash for google)",
+        help="Model id for the provider (default: gpt-4o-mini for openai, gemini-3.1-flash-lite for google)",
     )
     p.add_argument("--max_chars", type=int, default=4000, help="Truncate each example for the LLM")
     p.add_argument("--temperature", type=float, default=0.0)
@@ -181,7 +181,7 @@ def main() -> None:
         raise FileNotFoundError(args.input)
 
     if args.model is None:
-        args.model = "gemini-2.0-flash" if args.provider == "google" else "gpt-4o-mini"
+        args.model = "gemini-3.1-flash-lite" if args.provider == "google" else "gpt-4o-mini"
 
     if args.provider == "openai" and not os.environ.get("OPENAI_API_KEY"):
         raise EnvironmentError("OPENAI_API_KEY is not set")

@@ -132,7 +132,7 @@ variable "llm_provider" {
 
 variable "llm_model" {
   type        = string
-  description = "Optional pseudo-labeling model id (e.g. gpt-4o-mini, gemini-2.0-flash). Empty picks the provider default."
+  description = "Optional pseudo-labeling model id (e.g. gpt-4o-mini, gemini-3.1-flash-lite). Empty picks the provider default."
   default     = ""
 }
 
