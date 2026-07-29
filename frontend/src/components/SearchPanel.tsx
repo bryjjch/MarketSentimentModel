@@ -204,12 +204,12 @@ export function SearchPanel({
                 />
               ) : null}
               {searchResult.label ? (
-                <span className="rounded-full bg-white/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-700">
+                <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-800">
                   {searchResult.label}
                 </span>
               ) : null}
               {typeof searchResult.article_count === 'number' ? (
-                <span className="rounded-full bg-white/60 px-3 py-1 font-mono text-[11px] text-slate-700">
+                <span className="rounded-full bg-white/80 px-3 py-1 font-mono text-[11px] text-slate-800">
                   {searchResult.article_count} stories
                 </span>
               ) : null}

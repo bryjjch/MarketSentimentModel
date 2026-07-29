@@ -172,7 +172,7 @@ export function Heatmap({
                       <span
                         className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
                         style={{
-                          backgroundColor: 'rgb(255 255 255 / 65%)',
+                          backgroundColor: 'rgb(255 255 255 / 88%)',
                           color: accent.fg,
                           border: `1px solid ${accent.border}`,
                         }}
@@ -184,11 +184,11 @@ export function Heatmap({
                       {formatScore(row.score)}
                     </span>
                     {row.label ? (
-                      <span className="mt-3 inline-block w-fit rounded-md bg-white/55 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-slate-700">
+                      <span className="mt-3 inline-block w-fit rounded-md bg-white/80 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-slate-800">
                         {row.label}
                       </span>
                     ) : null}
-                    <span className="mt-auto pt-3 text-[10px] font-medium text-slate-600 opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="mt-auto pt-3 text-[10px] font-semibold text-slate-900 opacity-0 transition-opacity group-hover:opacity-100">
                       Open details →
                     </span>
                   </button>

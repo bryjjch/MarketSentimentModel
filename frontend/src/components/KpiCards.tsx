@@ -125,7 +125,7 @@ export function KpiCards({ rows, loading }: Props) {
   }, [rows])
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {kpis.map((kpi, i) => {
         const accent = ACCENT_CLASSES[kpi.accent]
         return (
