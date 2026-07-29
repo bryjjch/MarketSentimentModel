@@ -1,17 +1,12 @@
 # FinSense
 
-FinSense scores financial sentiment for US equities. A BERT-family classifier — FinBERT
-or a `bert-base-uncased` encoder adapted to financial text — is fine-tuned on Financial
-PhraseBank plus labels the system generates for itself, then served from a SageMaker
-Serverless Inference endpoint behind an HTTP API.
+FinSense is a financial news sentiment tool: a fine-tuned FinBERT classifier scores news about a given equity as negative, neutral, or positive, surfaced as a per-symbol heatmap dashboard.
 
-The system is a closed loop. A daily pipeline collects news and social text per ticker,
-scores it, keeps the confident predictions as training data, and sends the uncertain ones
-to an LLM for labeling. The labeled corpus grows every day without manual annotation, and
-a SageMaker training pipeline turns it into a new model version — registered only if it
-clears a macro-F1 gate, and promoted to the live endpoint only after a human approves it.
-Everything (nine Lambdas, the API, the buckets, the queues, the IAM) is Terraform, and
-every push to `main` deploys.
+<img width="1484" height="766" alt="Screenshot 2026-07-28 at 9 31 42 PM" src="https://github.com/user-attachments/assets/acedfbab-e783-4d37-8759-d9f0557554f2" />
+
+A daily job collects news and social text per ticker and scores it. Confident predictions are kept as new training data; uncertain ones are routed to an LLM for labeling -- so the labeled corpus grows every day with no manual annotation. A SageMaker training pipeline turns that corpus into a new model version, registered if it clears a macro-F1 gate and promoted to the live endpoint after human approval.
+
+The whole system is serverless and reproducible: the model runs on a SageMaker Serverless Inference endpoint behind an HTTP API, and all infrastructure -- nine Lambdas, the API, buckets, queues, and IAM -- is defined in Terraform. Every push to main deploys.
 
 ## Repository layout
 
