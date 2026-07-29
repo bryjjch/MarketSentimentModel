@@ -8,8 +8,8 @@ type Props = {
 export function DashboardLayout({ children }: Props) {
   return (
     <div className="flex min-h-svh flex-col bg-[color:var(--color-fs-bg)] text-[color:var(--color-fs-text)]">
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[color:var(--color-fs-border)] bg-white/90 px-4 backdrop-blur-md sm:px-6">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[color:var(--color-fs-blue)] to-[color:var(--color-fs-green)] text-white shadow-sm">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[color:var(--color-fs-border)] bg-[color:var(--color-fs-surface)]/80 px-4 backdrop-blur-md sm:px-6">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[color:var(--color-fs-blue)] to-[color:var(--color-fs-green)] text-[color:var(--color-fs-bg)] shadow-sm">
           <BullMark className="h-5 w-5" />
         </div>
         <div className="min-w-0">

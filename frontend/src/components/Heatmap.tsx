@@ -98,7 +98,7 @@ export function Heatmap({
 
   return (
     <Card
-      className="border border-[color:var(--color-fs-border)] bg-white/95 shadow-sm"
+      className="border border-[color:var(--color-fs-border)] bg-[color:var(--color-fs-surface)]/95 shadow-sm"
       pt={{
         body: { className: 'p-5 sm:p-6' },
         content: { className: 'p-0' },
@@ -159,7 +159,7 @@ export function Heatmap({
                     key={row.symbol}
                     type="button"
                     onClick={() => onSelectSymbol?.(row)}
-                    className="group fs-tile-in relative flex flex-col rounded-xl border p-4 text-left shadow-sm transition-[transform,box-shadow] duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-fs-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-white hover:-translate-y-0.5 hover:shadow-md sm:p-5"
+                    className="group fs-tile-in relative flex flex-col rounded-xl border p-4 text-left shadow-sm transition-[transform,box-shadow] duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-fs-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--color-fs-surface)] hover:-translate-y-0.5 hover:shadow-md sm:p-5"
                     style={{
                       ...scoreToCardStyle(row.score),
                       ['--fs-stagger' as string]: `${Math.min(i, 24) * 38}ms`,
@@ -172,7 +172,7 @@ export function Heatmap({
                       <span
                         className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
                         style={{
-                          backgroundColor: 'rgb(255 255 255 / 88%)',
+                          backgroundColor: 'rgb(6 11 20 / 55%)',
                           color: accent.fg,
                           border: `1px solid ${accent.border}`,
                         }}
@@ -184,11 +184,11 @@ export function Heatmap({
                       {formatScore(row.score)}
                     </span>
                     {row.label ? (
-                      <span className="mt-3 inline-block w-fit rounded-md bg-white/80 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-slate-800">
+                      <span className="mt-3 inline-block w-fit rounded-md bg-slate-950/45 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-slate-100">
                         {row.label}
                       </span>
                     ) : null}
-                    <span className="mt-auto pt-3 text-[10px] font-semibold text-slate-900 opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="mt-auto pt-3 text-[10px] font-semibold text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
                       Open details →
                     </span>
                   </button>

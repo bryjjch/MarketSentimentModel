@@ -109,9 +109,10 @@ export function TickerDetailModal({
       pt={{
         root: { className: 'rounded-2xl overflow-hidden' },
         header: {
-          className: 'border-b border-[color:var(--color-fs-border)] !bg-white',
+          className:
+            'border-b border-[color:var(--color-fs-border)] !bg-[color:var(--color-fs-surface)]',
         },
-        content: { className: '!bg-white' },
+        content: { className: '!bg-[color:var(--color-fs-surface)]' },
       }}
     >
       {display ? (
@@ -141,12 +142,12 @@ export function TickerDetailModal({
                 />
               ) : null}
               {display.label ? (
-                <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-800">
+                <span className="rounded-full bg-slate-950/45 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-100">
                   {display.label}
                 </span>
               ) : null}
               {typeof display.article_count === 'number' ? (
-                <span className="rounded-full bg-white/80 px-3 py-1 font-mono text-[11px] text-slate-800">
+                <span className="rounded-full bg-slate-950/45 px-3 py-1 font-mono text-[11px] text-slate-100">
                   {display.article_count} stories
                 </span>
               ) : null}

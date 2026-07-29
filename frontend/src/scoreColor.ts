@@ -8,17 +8,17 @@ type Rgb = { r: number; g: number; b: number }
  * mid-strength bearish tiles came out looking bullish.
  */
 
-/** Neutral surface at score 0 — cool gray, so "no signal" reads as no colour. */
-const NEUTRAL_HI: Rgb = { r: 246, g: 248, b: 251 }
-const NEUTRAL_LO: Rgb = { r: 231, g: 236, b: 243 }
+/** Neutral surface at score 0 — cool slate, so "no signal" reads as no colour. */
+const NEUTRAL_HI: Rgb = { r: 33, g: 43, b: 61 }
+const NEUTRAL_LO: Rgb = { r: 22, g: 30, b: 44 }
 
 /** Bearish surface at score −1. */
-const RED_HI: Rgb = { r: 254, g: 160, b: 156 }
-const RED_LO: Rgb = { r: 238, g: 88, b: 92 }
+const RED_HI: Rgb = { r: 155, g: 44, b: 51 }
+const RED_LO: Rgb = { r: 102, g: 28, b: 34 }
 
 /** Bullish surface at score +1. */
-const GREEN_HI: Rgb = { r: 140, g: 232, b: 178 }
-const GREEN_LO: Rgb = { r: 74, g: 203, b: 138 }
+const GREEN_HI: Rgb = { r: 26, g: 122, b: 84 }
+const GREEN_LO: Rgb = { r: 13, g: 79, b: 54 }
 
 /**
  * Sub-linear ramp from neutral to the full-strength surface. Real scores rarely
@@ -58,12 +58,12 @@ export function scoreToCardStyle(score: number): CSSProperties {
 
   return {
     background: `linear-gradient(155deg, ${css(mix(NEUTRAL_HI, hi, strength))} 0%, ${css(mix(NEUTRAL_LO, lo, strength))} 100%)`,
-    color: '#0f172a',
-    borderColor: 'rgb(15 23 42 / 12%)',
+    color: '#eef2f9',
+    borderColor: 'rgb(255 255 255 / 12%)',
   }
 }
 
-/** Semantic color (text/icon) for the sentiment score on a light surface. */
+/** Semantic color (text/icon) for the sentiment score on a dark surface. */
 export function scoreToAccent(score: number): {
   fg: string
   bg: string
@@ -73,24 +73,24 @@ export function scoreToAccent(score: number): {
   const t = clampScore(score)
   if (t > 0.05) {
     return {
-      fg: '#166534',
-      bg: '#dcfce7',
-      border: '#4ade80',
+      fg: '#6ee7b7',
+      bg: '#0f2f22',
+      border: '#1f6b4f',
       label: 'Bullish',
     }
   }
   if (t < -0.05) {
     return {
-      fg: '#991b1b',
-      bg: '#fee2e2',
-      border: '#f87171',
+      fg: '#fca5a5',
+      bg: '#3a1519',
+      border: '#8b3a3f',
       label: 'Bearish',
     }
   }
   return {
-    fg: '#1d4ed8',
-    bg: '#dbeafe',
-    border: '#93c5fd',
+    fg: '#93c5fd',
+    bg: '#152540',
+    border: '#2f4d80',
     label: 'Neutral',
   }
 }
