@@ -20,24 +20,24 @@ type Kpi = {
 
 const ACCENT_CLASSES: Record<Kpi['accent'], { ring: string; icon: string; chip: string }> = {
   blue: {
-    ring: 'from-[color:var(--color-fs-blue-soft)] to-white',
+    ring: 'from-[color:var(--color-fs-blue-soft)] to-[color:var(--color-fs-surface)]',
     icon: 'bg-[color:var(--color-fs-blue-soft)] text-[color:var(--color-fs-blue-deep)]',
     chip: 'text-[color:var(--color-fs-blue-deep)]',
   },
   green: {
-    ring: 'from-[color:var(--color-fs-green-soft)] to-white',
+    ring: 'from-[color:var(--color-fs-green-soft)] to-[color:var(--color-fs-surface)]',
     icon: 'bg-[color:var(--color-fs-green-soft)] text-[color:var(--color-fs-green-deep)]',
     chip: 'text-[color:var(--color-fs-green-deep)]',
   },
   red: {
-    ring: 'from-[color:var(--color-fs-red-soft)] to-white',
-    icon: 'bg-[color:var(--color-fs-red-soft)] text-red-700',
-    chip: 'text-red-700',
+    ring: 'from-[color:var(--color-fs-red-soft)] to-[color:var(--color-fs-surface)]',
+    icon: 'bg-[color:var(--color-fs-red-soft)] text-[color:var(--color-fs-red)]',
+    chip: 'text-[color:var(--color-fs-red)]',
   },
   slate: {
-    ring: 'from-slate-100 to-white',
-    icon: 'bg-slate-100 text-slate-700',
-    chip: 'text-slate-700',
+    ring: 'from-[color:var(--color-fs-surface-muted)] to-[color:var(--color-fs-surface)]',
+    icon: 'bg-[color:var(--color-fs-surface-muted)] text-[color:var(--color-fs-text-muted)]',
+    chip: 'text-[color:var(--color-fs-text-muted)]',
   },
 }
 
@@ -125,7 +125,7 @@ export function KpiCards({ rows, loading }: Props) {
   }, [rows])
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {kpis.map((kpi, i) => {
         const accent = ACCENT_CLASSES[kpi.accent]
         return (

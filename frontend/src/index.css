@@ -4,26 +4,32 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  /* FinSense palette — light surfaces, green + blue accents. */
-  --color-fs-bg: #f4f7fb;
-  --color-fs-surface: #ffffff;
-  --color-fs-surface-muted: #f8fafc;
-  --color-fs-border: #e2e8f0;
-  --color-fs-border-strong: #cbd5e1;
-  --color-fs-text: #0f172a;
-  --color-fs-text-muted: #475569;
-  --color-fs-text-subtle: #64748b;
+  /*
+   * FinSense palette — dark surfaces, green + blue accents.
+   *
+   * The `-soft` / `-deep` pair inverts from what those names imply on a light
+   * theme: `-soft` is the tinted *dark* fill behind chips, rules and washes,
+   * and `-deep` is the bright accent that sits on top of it.
+   */
+  --color-fs-bg: #0a0f1a;
+  --color-fs-surface: #141b2a;
+  --color-fs-surface-muted: #1c2537;
+  --color-fs-border: #27314a;
+  --color-fs-border-strong: #3a4763;
+  --color-fs-text: #e7edf9;
+  --color-fs-text-muted: #a9b5cb;
+  --color-fs-text-subtle: #7c8aa5;
 
-  --color-fs-blue: #2563eb;
-  --color-fs-blue-soft: #dbeafe;
-  --color-fs-blue-deep: #1d4ed8;
+  --color-fs-blue: #60a5fa;
+  --color-fs-blue-soft: #1e3a63;
+  --color-fs-blue-deep: #93c5fd;
 
-  --color-fs-green: #16a34a;
-  --color-fs-green-soft: #dcfce7;
-  --color-fs-green-deep: #15803d;
+  --color-fs-green: #34d399;
+  --color-fs-green-soft: #12402f;
+  --color-fs-green-deep: #6ee7b7;
 
-  --color-fs-red: #dc2626;
-  --color-fs-red-soft: #fee2e2;
+  --color-fs-red: #f87171;
+  --color-fs-red-soft: #3d1a1e;
 }
 
 html,
@@ -42,12 +48,12 @@ body {
   background-image:
     radial-gradient(
       ellipse 120% 90% at 0% 0%,
-      rgb(37 99 235 / 0.07),
+      rgb(96 165 250 / 0.13),
       transparent 55%
     ),
     radial-gradient(
       ellipse 100% 80% at 100% 0%,
-      rgb(22 163 74 / 0.06),
+      rgb(52 211 153 / 0.1),
       transparent 60%
     );
   background-attachment: fixed;
@@ -56,15 +62,56 @@ body {
 /* --- PrimeReact theme nudges to align with the FinSense palette --- */
 
 :root {
+  color-scheme: dark;
   --primary-color: var(--color-fs-blue);
-  --primary-color-text: #ffffff;
+  --primary-color-text: #061020;
   --surface-ground: var(--color-fs-bg);
   --surface-card: var(--color-fs-surface);
+  --surface-overlay: var(--color-fs-surface);
   --surface-border: var(--color-fs-border);
+  --maskbg: rgb(3 7 15 / 0.72);
 }
 
 .p-component {
   font-family: var(--font-sans);
+}
+
+/*
+ * The Lara theme ships compiled, so its surface colours are literals rather
+ * than the vars above. Repaint the few surfaces that would otherwise sit a
+ * shade off the FinSense palette.
+ *
+ * These go in PrimeReact's own layer, not unlayered: an unlayered rule would
+ * outrank Tailwind's `@layer utilities`, and a `background` shorthand here
+ * would then wipe out per-component utilities like the KPI cards' gradient.
+ * Same layer + later source order still beats the theme's own declarations.
+ */
+@layer primereact {
+  .p-card,
+  .p-dialog,
+  .p-dialog .p-dialog-header,
+  .p-dialog .p-dialog-content,
+  .p-autocomplete-panel {
+    background: var(--color-fs-surface);
+  }
+
+  .p-autocomplete-panel {
+    border-color: var(--color-fs-border);
+  }
+
+  .p-inputtext {
+    background: var(--color-fs-bg);
+    border-color: var(--color-fs-border-strong);
+    color: var(--color-fs-text);
+  }
+
+  .p-inputtext::placeholder {
+    color: var(--color-fs-text-subtle);
+  }
+
+  .p-skeleton {
+    background-color: var(--color-fs-surface-muted);
+  }
 }
 
 /* --- FinSense motion (see components for class usage) --- */

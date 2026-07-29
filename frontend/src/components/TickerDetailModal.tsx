@@ -89,13 +89,8 @@ export function TickerDetailModal({
       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[color:var(--color-fs-blue-soft)] text-[color:var(--color-fs-blue-deep)]">
         <i className="pi pi-chart-line" />
       </div>
-      <div>
-        <div className="font-mono text-base font-semibold tracking-tight text-[color:var(--color-fs-text)]">
-          {display.symbol}
-        </div>
-        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-[color:var(--color-fs-text-subtle)]">
-          Sentiment detail
-        </div>
+      <div className="font-mono text-base font-semibold tracking-tight text-[color:var(--color-fs-text)]">
+        {display.symbol}
       </div>
     </div>
   ) : null
@@ -114,9 +109,10 @@ export function TickerDetailModal({
       pt={{
         root: { className: 'rounded-2xl overflow-hidden' },
         header: {
-          className: 'border-b border-[color:var(--color-fs-border)] !bg-white',
+          className:
+            'border-b border-[color:var(--color-fs-border)] !bg-[color:var(--color-fs-surface)]',
         },
-        content: { className: '!bg-white' },
+        content: { className: '!bg-[color:var(--color-fs-surface)]' },
       }}
     >
       {display ? (
@@ -146,12 +142,12 @@ export function TickerDetailModal({
                 />
               ) : null}
               {display.label ? (
-                <span className="rounded-full bg-white/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-700">
+                <span className="rounded-full bg-slate-950/45 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-100">
                   {display.label}
                 </span>
               ) : null}
               {typeof display.article_count === 'number' ? (
-                <span className="rounded-full bg-white/60 px-3 py-1 font-mono text-[11px] text-slate-700">
+                <span className="rounded-full bg-slate-950/45 px-3 py-1 font-mono text-[11px] text-slate-100">
                   {display.article_count} stories
                 </span>
               ) : null}
