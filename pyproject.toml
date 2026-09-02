@@ -22,7 +22,7 @@ dependencies = []
 # installs none of this.
 train = [
     "torch==2.13.0",
-    "transformers==5.5.3",
+    "transformers==5.10.1",
     "datasets==3.2.0",
     "accelerate==1.4.0",
     "numpy==2.1.3",
@@ -39,7 +39,7 @@ train = [
 # requirements.txt under serving/code/ is what would make the DLC install pins.
 serve = [
     "torch==2.13.0",
-    "transformers==5.5.3",
+    "transformers==5.10.1",
     "numpy==2.1.3",
     "safetensors==0.4.5",
 ]
